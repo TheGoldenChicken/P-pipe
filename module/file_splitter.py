@@ -2,6 +2,7 @@ import os
 import pandas as pd
 import click
 
+# TODO: Potentially add exceptions and such to this? Does it makes sense to have it return exit codes and whatnot?
 def split_csv_by_proportions(csv_file, proportions, output_dir="splits"):
     """
     Splits a CSV file into multiple parts according to given proportions.
@@ -27,14 +28,13 @@ def split_csv_by_proportions(csv_file, proportions, output_dir="splits"):
         df_part.to_csv(os.path.join(output_dir, f"split_{i+1}.csv"), index=False)
         start = end
 
+# TODO: Ensure consistent naming across files: input_file, csv_file, etc...
 @click.command()
 @click.option("--csv_file", help="Path to the file to generate splits from")
-# TODO: See if you can't use type = 'list' with this one... something at least worked...
+# TODO: Potentially add like a callback lambda to convert it in-line? But then again... KISS?
 @click.option('--proportions', help="List of proportions to generate splits from. Comma seperated, no brackets!")
 @click.option('--output_dir', help="Output directory to place splits in")
 def split_csv_by_proportions_cmd(csv_file, proportions, output_dir="splits"):
-    print(f'RIGHT HERE {type(proportions)} {proportions}')
-    # TODO: See if there isn't a better way of doing this
     proportions = [float(p.strip()) for p in proportions.split(',')]
 
     split_csv_by_proportions(csv_file, proportions, output_dir)
