@@ -57,3 +57,14 @@ In line with the thoughts about Python and Miniconda before, some people had sim
 #### Seperate dev_logs?
 
 PyO3 is already an issue that might require looking into? I have just now, briefly considered whether the dev log should be split into different subfolders? That way, each issue that requires research or the like, can have a dev log file attached to it? Does that make sense or is it insane amounts of documentation?
+
+
+## 25-08-2025
+
+Had some thoughts about the DD not really making up a whole "pipeline" - just part of it. Testing the ability to grab this data, do some feature engineering, and hand it in again, does not test the ability to create a pipeline in itself, for that we probably neeed something more sophisticated (or manual).
+
+Decided it would be good to have an overall plan / vision about what needs to be done, what sub-parts need to be made. Tried to do this in GitHub Projects, but issues isn't really conducive to showing that some things are not "specific" issues, but more overall planning. 
+
+Milestones, though, can be tagged unto issues, have a start and an end date, and probably fit the bill quite nicely.
+
+Though having a timeline in GitHub Projects appears to be a shitshow, even so, it would be a shame not to have everything in one place.
