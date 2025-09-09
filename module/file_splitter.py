@@ -41,5 +41,5 @@ def split_csv_by_proportions_cmd(csv_file, proportions, output_dir="splits"):
 
 if __name__ == "__main__":
     # Example use:
-    # python ../file_splitter.py --csv_file test_data/iris.csv --proportions 0.5,0.25,0.25 --output_dir "splits"
-    split_csv_by_proportions()
+    # python ../file_splitter.py --csv_file tests/test_data/iris.csv --proportions 0.5,0.25,0.25 --output_dir "tests/test_data/splits"
+    split_csv_by_proportions_cmd()
