@@ -1,5 +1,5 @@
-# Rust buidl artifacts
-/target
+# Rust build artifacts
+target/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
