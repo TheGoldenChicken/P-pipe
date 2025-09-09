@@ -68,3 +68,28 @@ Decided it would be good to have an overall plan / vision about what needs to be
 Milestones, though, can be tagged unto issues, have a start and an end date, and probably fit the bill quite nicely.
 
 Though having a timeline in GitHub Projects appears to be a shitshow, even so, it would be a shame not to have everything in one place.
+
+## 05-09-2025
+
+Made Python work in Rust with PyO3. Did by fixing two issues: One with linking cc compiler (done by removing extension-module (should only be chosen if you make python-extensions)). 
+
+The other issue was fixing the libpython.3.12.1.so file not being found. As it turns out, these are shared files, not kept by the current virtual environment. Fixed by setting LD_LIBRARY_PATH to the place where it keeps those .so files. Usually this would be in usr/lib or some other place there. Miniconda appears keeps them to itself if it is the first one to install that particular version. 
+
+Switched to using uv. Know, that uv still uses some miniconda Python files, as this appears to be the easist for it. It does not appear to cause issues, just be aware that even though we set the PYO3 venv with `export PYO3_PYTHON=/home/cicero/ppipe/.venv/bin/python`, it does not set to find the .so file from that same location.
+
+The aboev export PYO3_PYTHON command does make sure the PYO3 interpreter uses the installed UV packages, this was tested and verified.
+
+## 08-09-2025
+
+Worked on getting dispatcher module to work in Rust, two interesting errors:
+1. Could not find dispatcher module before explicitly adding current folder to PythonPath with `sys.path.insert(0, os.getcwd())`, suggested solution was also adding folder to PythonPath directly: `PYTHONPATH=$(pwd) cargo run`. 
+2. Couldn't find click (wonder why?) Initially, it was not installed. Installed it with `uv add click`, did not fix issue. Set PyO3 interpreter with `export PYO3_PYTHON=/home/cicero/ppipe/.venv/bin/python`, still did not fix it. Only after activating uv venv directly with `source .venv/bin/activate` did work. Suspect this means that `PyO3_PYTHON` variable, does not work as expected...
+
+Made decision that rust should not only import modules and such to run code, they should run no code at all, only modules. This makes the whole process of executing the dispatchers, etc. a matter of rust running the "runners". Made such a mockup runner script for the file_splitter and the dispatcher. Successfully ran it.
+
+Now running into a cryptic issue when importing the dispatcher (which uses pandas): "C extension: pickle not built. If you want to import pandas from the source directory, you may need to run 'python setup.py build_ext' to build the C extensions first." Not a lot of information online, seems to be an error with the pandas installation. Most people suggest reinstalling pandas. I suspect it is a problem from using LD_LIBRARY_PATH, as whatever C extensions that pickle uses comes from somewhere outside of the LD_LIBRARY_PATH
+
+Considering not using Rust, right now might be more trouble than it is worth...
+That is not even to mention what might happen when we start using more "unique" packages than Pandas...
+Right now, solution appears to just be to go with Rust spawning a process for each Python file that needs to run, and then calling each Python script that needs to be called...
+...That just requires that each Python tool has a CLI tool made with it, which shouldn't *really* be an issue ig.
