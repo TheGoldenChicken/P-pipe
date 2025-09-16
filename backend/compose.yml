@@ -1,0 +1,22 @@
+# To enter db: 
+# docker exec -it ppipe_db psql -U postgres
+# \dt
+
+# To list db running:
+# docker ps -a
+
+services:
+  db:
+    container_name: ppipe_db
+    image: postgres:12
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+  
+volumes:
+  pgdata: {}
