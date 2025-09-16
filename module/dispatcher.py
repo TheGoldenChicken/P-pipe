@@ -20,4 +20,6 @@ def simple_dispatcher_cmd(input_file, output_dir, merge_files=False):
     
 
 if __name__ == '__main__':
+    # Example use:
+    # python module/dispatcher.py --input_file tests/test_data/splits/split_1.csv --output_dir tests/test_data/dispatched --merge_files False
     simple_dispatcher_cmd()
