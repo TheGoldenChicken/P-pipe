@@ -139,4 +139,8 @@ Right now, we only have 2 values in our rows_to_push to imitate a range, a *star
 
 Didn't really have all that much time to clean everything up.
 
+A lot of the issues that I had today with types and rust to postgres and whatnot, *COULD* be solved by an ORM like diesel or sqlx... I just really don't like adding layers of abstraction. Give it a few more issues, however, and I might fold, right now, most of my time is spent fixing that sort of issues, and last time I worked with Postgres was no different... 
+
+Got a ton of TODO's that I really need to look at at some point, really before I clean it up.
+
 Next time, will clean up a bit more, work on creating tests for all endpoints with reasonable parameters
