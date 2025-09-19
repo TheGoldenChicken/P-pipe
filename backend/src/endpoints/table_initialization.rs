@@ -6,15 +6,15 @@ pub async fn create_tables(client: &Client) {
         -- Bookkeeping fields
             id SERIAL PRIMARY KEY,
             name TEXT NOT NULL,
-            created_at DOUBLE PRECISION DEFAULT EXTRACT(EPOCH FROM now()),
+            created_at BIGINT DEFAULT EXTRACT(EPOCH FROM now()),
             init_dataset_location TEXT NOT NULL,
             init_dataset_name TEXT,
             init_dataset_description TEXT,
 
             -- Option fields
-            time_of_first_release DOUBLE PRECISION NOT NULL,
-            release_proportions FLOAT[] NOT NULL,
-            time_between_releases DOUBLE PRECISION NOT NULL -- Should be given in seconds
+            time_of_first_release BIGINT NOT NULL,
+            release_proportions DOUBLE PRECISION[] NOT NULL,
+            time_between_releases BIGINT NOT NULL -- Should be given in seconds
         );    
     ";
 
@@ -23,14 +23,14 @@ pub async fn create_tables(client: &Client) {
             -- Bookkeeping fields
             id SERIAL PRIMARY KEY,
             challenge_id INTEGER NOT NULL REFERENCES challenges(id) ON DELETE CASCADE ON UPDATE CASCADE,
-            created_at DOUBLE PRECISION DEFAULT EXTRACT(EPOCH FROM now()),
+            created_at BIGINT DEFAULT EXTRACT(EPOCH FROM now()),
             
             -- Transaction info fields
             -- Possibly add a new one like 'should_overwrite' BOOLEAN DEFAULT FALSE
-            scheduled_time DOUBLE PRECISION NOT NULL,
+            scheduled_time BIGINT NOT NULL,
             source_data_location TEXT NOT NULL,
             data_intended_location TEXT NOT NULL,
-            rows_to_push int4range[] NOT NULL
+            rows_to_push INT4RANGE[] NOT NULL
         );
     ";
 
@@ -39,16 +39,16 @@ pub async fn create_tables(client: &Client) {
             -- Bookkeeping fields
             id SERIAL PRIMARY KEY,
             challenge_id INTEGER NOT NULL REFERENCES challenges(id) ON DELETE CASCADE ON UPDATE CASCADE,
-            created_at DOUBLE PRECISION DEFAULT EXTRACT(EPOCH FROM now()),
+            created_at BIGINT DEFAULT EXTRACT(EPOCH FROM now()),
 
             -- Transaction info fields
-            scheduled_time DOUBLE PRECISION NOT NULL,
+            scheduled_time BIGINT NOT NULL,
             source_data_location TEXT NOT NULL,
             data_intended_location TEXT NOT NULL,
-            rows_to_push int4range[] NOT NULL,
+            rows_to_push INT4RANGE[] NOT NULL,
 
             -- Status fields
-            attempted_at DOUBLE PRECISION,
+            attempted_at BIGINT,
             status TEXT, -- TODO: Should be replaced with an enum of 'failed', 'succeeded', 'etc'
             stdout TEXT,
             stderr TEXT
