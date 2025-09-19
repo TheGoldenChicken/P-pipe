@@ -4,7 +4,7 @@ use tokio_postgres::NoTls;
 use rocket_cors::{ CorsOptions, AllowedOrigins };
 
 mod endpoints;
-use endpoints::dispatcher::{call_file_splitter, call_dispatcher};
+use endpoints::dispatcher::{add_challenge, delete_challenge, get_challenges};
 use endpoints::table_initialization;
 
 #[launch]
@@ -29,6 +29,7 @@ async fn rocket() -> _ {
     rocket
         ::build()
         .manage(client)
-        .mount("/", routes![call_file_splitter, call_dispatcher])
+        .mount("/", routes![add_challenge, delete_challenge, get_challenges])
         .attach(cors)
 }
+
