@@ -93,3 +93,50 @@ Considering not using Rust, right now might be more trouble than it is worth...
 That is not even to mention what might happen when we start using more "unique" packages than Pandas...
 Right now, solution appears to just be to go with Rust spawning a process for each Python file that needs to run, and then calling each Python script that needs to be called...
 ...That just requires that each Python tool has a CLI tool made with it, which shouldn't *really* be an issue ig.
+
+
+# 09-09-2025
+
+Documented decision to trash pyo3. Started cleaning up repo
+Going to begin work on using the Python files through CLI commands.
+Also preparing for meeting with Nicki. Will try to get an idea on:
+- What should be the scope of the project? What is likely I *can* make
+- What is best tofocus on from a feasability / importance standpoint? The data module? Or the continuous integration module? 
+- What should I do in regards to ancillary studies? Should I ask people on opinions and stuff?
+- How important is a frontend, do you think?
+
+For tests:
+- need to remove fixtures in the tests for the dispatcher, not necessary
+- Need to add note if (non integration) tests of dispatchers are run without the "splits" directory exists, they will fail if so
+
+Apparently `__init__.py` is required as a file in the tests directory. Wonder why? Thought they removed that functionality / necessity
+
+We need to add plenty of debugging and logging information to Python scripts. Remember, stderr and stdout are the only ways that Rust are informed of the failures / successes of the script! Otherwise, it just gets exit codes!
+
+# 19-09-2025
+
+Completed project plan, sent off to Nicki. Said we wrote a bit "personally", was expected. Going to change that for the report, surely.
+
+Worked on backend stuff in Rust mostly, didn't touch Python
+(Unlogged) Had previously decided on, and completed table_initialization.rs for challenges, transactions, and completed_transactions for Postgres
+The table structure set up here, had to be changed somewhat
+
+Started by creating standard GET, POST, DELETE endpoints for Challenges, easily done, had small issues with DOUBLE PRECISION being float8, as opposed to integer8
+Postgres type naming convention is shit...
+Tested these endpoints real quick in Postman, appeard to work, still need to write tests for them
+
+Next, worked on transactions and adding these. They should be generated automatically from challenge options. 
+Wrote code reasonably quick, ran into quite a few issues, mostly considering Rust -> Postgres type conversions.
+Once more had to restructure what types everything was in the tables, but ran into one big issue:
+Postgres INT4RANGE has no straightforward Rust representation. This is shit.
+Tried writing a custom struct, which is essentially a wrapper on std::opt::Range in Rust which implements ToSql and FromSql (thanks, copilot)
+Did not work, however. Don't exactly know why, whenever I used it, it did not seralize correctly, in the sense that whenever I tried to execute queries with those structs included as parameters, the parameters did not correctly replace the string places... Best idea for why this is, is because I did not implement traits for multiple inserts at once (no idea how I'd even do that, tbh). Overall, the juice didn't seem to be worth the squeeze.
+Copilot recommended using JSONB as the rows_to_push column for postgres, that way, I could push a Vec<Range<i32>>, or a Vec<(i32, i32)>, but this did not work out straightforward like, since it would have to be pushed through some serde::to_value or serde::to_string bullshit, which didn't work.
+Made me think, however, why do we even need something like Vec<(i32, i32)>? We only need *one* range per transaction (ideally), so having rows_to_push be a Vec<i32> or in postgres INTEGER[] would be adequate. 
+One issue here, is that postgres now does no checking that what we push is actually a range... We might push more numbers, which will then fuck up during deserialization or subsequent handling... however, none of that is user-side, so we might be able to account for it, we'll just have to be more vigilant. 
+Another issue issue is, this *might* create issues if we want AI storytellers or other things to push different datapoints, like randomized... We might want to do that. In this case, however, we could simply shuffle the data beforehand...
+Right now, we only have 2 values in our rows_to_push to imitate a range, a *start* and a *stop* (inclusive, exclusive), this can be changed to include specific indices to push. Would make storage requirements a bit higher, but might be worth it to push a non-contiguous range of data points at a time. IF we go for this, it also makes the postgres type make a bit more sense... nice.
+
+Didn't really have all that much time to clean everything up.
+
+Next time, will clean up a bit more, work on creating tests for all endpoints with reasonable parameters
