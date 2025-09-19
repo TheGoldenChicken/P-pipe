@@ -8,6 +8,7 @@ pub async fn create_tables(client: &Client) {
             name TEXT NOT NULL,
             created_at BIGINT DEFAULT EXTRACT(EPOCH FROM now()),
             init_dataset_location TEXT NOT NULL,
+            init_dataset_rows INTEGER NOT NULL,
             init_dataset_name TEXT,
             init_dataset_description TEXT,
 
@@ -30,7 +31,8 @@ pub async fn create_tables(client: &Client) {
             scheduled_time BIGINT NOT NULL,
             source_data_location TEXT NOT NULL,
             data_intended_location TEXT NOT NULL,
-            rows_to_push INT4RANGE[] NOT NULL
+            -- Really would have wanted this to be of type INT4RANGE - that is more correct, but rust won't serialize easily. So we're stuck with jsonB instead...
+            rows_to_push INTEGER[] NOT NULL
         );
     ";
 
@@ -45,7 +47,7 @@ pub async fn create_tables(client: &Client) {
             scheduled_time BIGINT NOT NULL,
             source_data_location TEXT NOT NULL,
             data_intended_location TEXT NOT NULL,
-            rows_to_push INT4RANGE[] NOT NULL,
+            rows_to_push INTEGER[] NOT NULL,
 
             -- Status fields
             attempted_at BIGINT,
