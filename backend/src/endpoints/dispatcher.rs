@@ -1,13 +1,20 @@
-use rocket::serde::{ Deserialize, Serialize, json::Json };
-use rocket::{ State, response::status::Custom, http::Status };
-use tokio_postgres::Client;
-
+use rocket::{response::status::Custom, http::Status};
+use rocket::fairing::AdHoc;
+use rocket::serde::{Serialize, Deserialize, json::Json};
+use rocket_db_pools::{Database, Connection};
+use sqlx::Arguments;
 // TODO: Consider if we should do away with the whole Custom<String> Type and instead just use tokio_postgres::Error?
 // TODO: Consider if we should look into a way of having custom return messages... what if we want to show both challenges affected, AND transactions?
 
+// TODO: Consider if it even makes sense to have this here, we use it in more places, but it is also so little code, sooooooo?
+#[derive(Database)]
+#[database("postgres_db")]
+pub struct Db(sqlx::PgPool);
 
-// TODO: To it possible to have a more a general "get n from database" function, consider implementing a FromRow trait for Challenge and all other relevant classes
-#[derive(Serialize, Deserialize, Clone)]
+type Result<T, E = rocket::response::Debug<sqlx::Error>> = std::result::Result<T, E>;
+
+
+#[derive(Serialize, Deserialize, Clone, sqlx::FromRow)]
 pub struct Challenge {
     // "Bookkeeping fields"
     id: Option<i32>,
@@ -21,11 +28,24 @@ pub struct Challenge {
     // Option fields
     time_of_first_release: i64,
     release_proportions: Vec<f64>,
-    time_between_releases:i64,
+    time_between_releases: i64,
+}
+#[derive(Serialize, Deserialize, Clone, Debug, sqlx::FromRow)]
+
+struct Transaction {
+    id: Option<i32>,
+    challenge_id: i32,
+    created_at: Option<i64>,
+    scheduled_time: i64,
+    source_data_location: String,
+    data_intended_location: String,
+    rows_to_push: Vec<i32>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct Transaction {
+
+
+#[derive(Serialize, Deserialize, Clone, Debug, sqlx::FromRow)]
+struct CompletedTransaction {
     // "Bookkeeping fields"
     id: Option<i32>,
     challenge_id: i32,
@@ -47,8 +67,8 @@ pub struct Transaction {
 
 // TODO: Consider if this function should even return all challenges when added, might be kinda bad...
 #[post("/api/challenges", data = "<challenge>")]
-pub async fn add_challenge(
-    conn: &State<Client>,
+async fn add_challenge(
+    mut db: Connection<Db>,
     challenge: Json<Challenge> 
 ) -> Result<Json<Vec<Challenge>>, Custom<String>>  {
     
@@ -59,67 +79,77 @@ pub async fn add_challenge(
     // - Is time between releases a fair number?
 
     // TODO; Check if we can do this with execute_query?
-    let challenge = conn.query_one(
-    "INSERT INTO challenges
-    (name, init_dataset_location, init_dataset_rows, init_dataset_name, init_dataset_description, time_of_first_release, release_proportions, time_between_releases)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-    RETURNING *",
-    &[&challenge.name, &challenge.init_dataset_location, &challenge.init_dataset_rows, &challenge.init_dataset_name, &challenge.init_dataset_description,
-        &challenge.time_of_first_release, &challenge.release_proportions, &challenge.time_between_releases]
-    ).await.map_err(|e| Custom(Status::InternalServerError, e.to_string()))
-    .map(|row| Challenge { id: Some(row.get("id")),
-                                name: row.get("name"),
-                                created_at: row.get("created_at"),
-                                init_dataset_location: row.get("init_dataset_location"),
-                                init_dataset_rows: row.get("init_dataset_rows"),
-                                init_dataset_name: row.get("init_dataset_name"),
-                                init_dataset_description: row.get("init_dataset_description"),
-                                time_of_first_release: row.get("time_of_first_release"),
-                                release_proportions: row.get("release_proportions"),
-                                time_between_releases: row.get("time_between_releases"),
-                                })?;
+    let challenge = sqlx::query_as!(
+        Challenge,
+        r#"
+        INSERT INTO challenges
+        (name, init_dataset_location, init_dataset_rows, init_dataset_name, init_dataset_description, time_of_first_release, release_proportions, time_between_releases)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        RETURNING *
+        "#,
+        challenge.name,
+        challenge.init_dataset_location,
+        challenge.init_dataset_rows,
+        challenge.init_dataset_name,
+        challenge.init_dataset_description,
+        challenge.time_of_first_release,
+        &challenge.release_proportions,
+        challenge.time_between_releases
+    )
+    .fetch_one(&mut **db)
+    .await.map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
     
     // Generate transactions and add them to the DB
     let generated_transactions = transactions_from_challenge(challenge);
-    add_transactions_into_db(conn, generated_transactions).await?;
+    add_transactions_into_db(&mut db, &generated_transactions).await?;
 
-    get_challenges(conn).await                            
+    get_challenges(db).await                            
 }
 
-pub async fn add_transactions_into_db(
-    conn: &Client,
-    transactions: Vec<Transaction>,
+
+async fn add_transactions_into_db(
+    // db: &sqlx::PgPool,
+    db: &mut Connection<Db>,
+    transactions: &[Transaction],
 ) -> Result<u64, Custom<String>> {
     if transactions.is_empty() {
         return Ok(0);
     }
 
-    // Build the VALUES clause with placeholders
+    // Build VALUES clause and parameter list
     let mut query = String::from("INSERT INTO transactions (challenge_id, scheduled_time, source_data_location, data_intended_location, rows_to_push) VALUES ");
-    let mut params: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> = Vec::new();
+    let mut args = sqlx::postgres::PgArguments::default();
 
     for (i, tx) in transactions.iter().enumerate() {
-        let base = i * 5;
-        query.push_str(&format!(
-            "(${}, ${}, ${}, ${}, ${})",
-            base + 1,
-            base + 2,
-            base + 3,
-            base + 4,
-            base + 5
-        ));
-        if i < transactions.len() - 1 {
+        if i > 0 {
             query.push_str(", ");
         }
+        query.push_str(&format!(
+            "(${}, ${}, ${}, ${}, ${})",
+            i * 5 + 1,
+            i * 5 + 2,
+            i * 5 + 3,
+            i * 5 + 4,
+            i * 5 + 5
+        ));
 
-        params.push(&tx.challenge_id);
-        params.push(&tx.scheduled_time);
-        params.push(&tx.source_data_location);
-        params.push(&tx.data_intended_location);
-        params.push(&tx.rows_to_push);
+        args.add(tx.challenge_id);
+        args.add(tx.scheduled_time);
+        args.add(&tx.source_data_location);
+        args.add(&tx.data_intended_location);
+        args.add(&tx.rows_to_push);
     }
 
-    execute_query(conn, &query, &params).await
+    // A shame here we can't use compile-time checked sql, since bulk insert and whatnot. A fucking shame
+    // Also a fucking shame getting caught up on a single fucking deref * as well, fucking shoot me
+    // There is no moral dilemmad, do you hop in front of the moving trolley? Yes!
+    let affected = sqlx::query_with(&query, args)
+        .execute(&mut ***db)
+        .await
+        .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?
+        .rows_affected();
+
+    Ok(affected)
 }
 
 
@@ -151,10 +181,6 @@ fn transactions_from_challenge(challenge: Challenge) -> Vec<Transaction> {
             source_data_location: challenge.init_dataset_location.clone(),
             data_intended_location: format!("release_{}", i),
             rows_to_push,
-            attempted_at: None,
-            status: None,
-            stdout: None,
-            stderr: None,
         };
         transactions.push(transaction);
     }
@@ -163,98 +189,63 @@ fn transactions_from_challenge(challenge: Challenge) -> Vec<Transaction> {
 }
 
 
-
 #[get("/api/challenges")]
-pub async fn get_challenges(conn: &State<Client>) -> Result<Json<Vec<Challenge>>, Custom<String>> {
-    get_challenges_from_db(conn).await.map(Json)
+async fn get_challenges(mut db: Connection<Db>) -> Result<Json<Vec<Challenge>>, Custom<String>> {
+    let challenges = sqlx::query_as!(
+        Challenge,
+        "SELECT * FROM challenges"
+    )
+    .fetch_all(&mut **db)
+    .await
+    .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
+
+    Ok(Json(challenges))
 }
 
-async fn get_challenges_from_db(client: &Client) -> Result<Vec<Challenge>, Custom<String>> {
-    let challenges = client
-    .query("SELECT * FROM challenges", &[]).await
-    .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?
-    .iter()
-    .map(|row| Challenge { id: Some(row.get("id")),
-                                name: row.get("name"),
-                                created_at: row.get("created_at"),
-                                init_dataset_location: row.get("init_dataset_location"),
-                                init_dataset_rows: row.get("init_dataset_rows"),
-                                init_dataset_name: row.get("init_dataset_name"),
-                                init_dataset_description: row.get("init_dataset_description"),
-                                time_of_first_release: row.get("time_of_first_release"),
-                                release_proportions: row.get("release_proportions"),
-                                time_between_releases: row.get("time_between_releases"),
-                                })
-    .collect::<Vec<Challenge>>();
-    Ok(challenges)
-}
-
-// TODO: delete shouldn't return Status::NoContent, but u32, if we wanna standardize across the entire thing...
 #[delete("/api/challenges/<id>")]
-pub async fn delete_challenge(conn: &State<Client>, id: i32) -> Result<Status, Custom<String>> {
-    execute_query(conn, "DELETE FROM challenges WHERE id = $1", &[&id]).await?;
+async fn delete_challenge(mut db: Connection<Db>, id: i32) -> Result<Status, Custom<String>> {
+    sqlx::query!(
+        "DELETE FROM challenges WHERE id = $1",
+        id
+    )
+    .execute(&mut **db)
+    .await
+    .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
+
     Ok(Status::NoContent)
 }
 
 #[get("/api/transactions")]
-pub async fn get_transactions(conn: &State<Client>) -> Result<Json<Vec<Transaction>>, Custom<String>> {
-    get_transactions_from_db(conn).await.map(Json)
+async fn get_transactions(mut db: Connection<Db>) -> Result<Json<Vec<Transaction>>, Custom<String>> {
+    let transactions = sqlx::query_as!(
+        Transaction,
+        "SELECT id, challenge_id, created_at, scheduled_time, source_data_location, data_intended_location, rows_to_push FROM transactions"
+    )
+    .fetch_all(&mut **db)
+    .await
+    .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
+
+    Ok(Json(transactions))
 }
-
-// TODO: ADD THESE TO THE CORS, AND TEST THEM!
-
-// TODO: Find out specifically why we don't need to call Some on status, attempted_at ,stdout, stderr, and so on...
-async fn get_transactions_from_db(client: &Client) -> Result<Vec<Transaction>, Custom<String>> {
-    let transactions = client
-        .query("SELECT * FROM transactions", &[])
-        .await
-        .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?
-        .iter()
-        .map(|row| Transaction {
-            id: Some(row.get("id")),
-            challenge_id: row.get("challenge_id"),
-            created_at: row.get("created_at"),
-            scheduled_time: row.get("scheduled_time"),
-            source_data_location: row.get("source_data_location"),
-            data_intended_location: row.get("data_intended_location"),
-            rows_to_push: row.get("rows_to_push"),
-            attempted_at: row.get("attempted_at"),
-            status: row.get("status"),
-            stdout: row.get("stdout"),
-            stderr: row.get("stderr"),
-        })
-        .collect::<Vec<Transaction>>();
-    Ok(transactions)
-}
-
-pub async fn add_transation_into_db(
-    conn: &State<Client>,
-    transaction: Transaction
-) -> Result<u64, Custom<String>> {
-    execute_query(conn,
-    "INSERT INTO transactions
-    (challenge_id, scheduled_time, source_data_location, data_intended_location, rows_to_push)
-    VALUES ($1, $2, $3, $4, $5)",
-    &[&transaction.challenge_id, &transaction.scheduled_time, &transaction.source_data_location,
-            &transaction.data_intended_location, &transaction.rows_to_push]
-    ).await
-}
-
 
 #[delete("/api/transactions/<id>")]
-pub async fn delete_transaction(conn: &State<Client>, id: i32) -> Result<Status, Custom<String>> {
-    execute_query(conn, "DELETE FROM transactions WHERE id = $1", &[&id]).await?;
+async fn delete_transaction(mut db: Connection<Db>, id: i32) -> Result<Status, Custom<String>> {
+    sqlx::query!(
+        "DELETE FROM transactions WHERE id = $1",
+        id
+    )
+    .execute(&mut **db)
+    .await
+    .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
+
     Ok(Status::NoContent)
 }
 
 
-
-async fn execute_query(
-    client: &Client,
-    query: &str,
-    params: &[&(dyn tokio_postgres::types::ToSql + Sync)]
-) -> Result<u64, Custom<String>> {
-    client
-        .execute(query, params).await
-        .map_err(|e| Custom(Status::InternalServerError, e.to_string()))
+pub fn stage() -> AdHoc {
+    AdHoc::on_ignite("SQLx Stage", |rocket| async {
+        rocket.attach(Db::init())
+            // .attach(AdHoc::try_on_ignite("SQLx Migrations", run_migrations))
+            .mount("/", routes![add_challenge, get_challenges, delete_challenge, get_transactions, delete_transaction])
+    })
 }

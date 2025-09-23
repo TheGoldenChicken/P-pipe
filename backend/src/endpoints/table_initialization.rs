@@ -1,7 +1,8 @@
-use tokio_postgres::Client;
+use super::dispatcher::Db;
+use rocket_db_pools::Connection;
 
-pub async fn create_tables(client: &Client) {
-    let create_challenges_string = "
+pub async fn create_tables(db: &mut Connection<Db>) -> Result<(), sqlx::Error> {
+    let create_challenges_string = r#"
         CREATE TABLE IF NOT EXISTS challenges (
         -- Bookkeeping fields
             id SERIAL PRIMARY KEY,
@@ -17,9 +18,9 @@ pub async fn create_tables(client: &Client) {
             release_proportions DOUBLE PRECISION[] NOT NULL,
             time_between_releases BIGINT NOT NULL -- Should be given in seconds
         );    
-    ";
+    "#;
 
-    let create_transactions_string = "
+    let create_transactions_string = r#"
         CREATE TABLE IF NOT EXISTS transactions (
             -- Bookkeeping fields
             id SERIAL PRIMARY KEY,
@@ -34,9 +35,9 @@ pub async fn create_tables(client: &Client) {
             -- Really would have wanted this to be of type INT4RANGE - that is more correct, but rust won't serialize easily. So we're stuck with jsonB instead...
             rows_to_push INTEGER[] NOT NULL
         );
-    ";
+    "#;
 
-    let create_completed_transactions_string = "
+    let create_completed_transactions_string = r#"
         CREATE TABLE IF NOT EXISTS completed_transactions (
             -- Bookkeeping fields
             id SERIAL PRIMARY KEY,
@@ -55,17 +56,12 @@ pub async fn create_tables(client: &Client) {
             stdout TEXT,
             stderr TEXT
         );
-    ";
+    "#;
 
-    if let Err(e) = client.execute(create_challenges_string, &[]).await {
-        eprintln!("Error creating challenges table: {}", e);
-    }
+    // TODO: Consider if it is true that we should go with the runtime checked and not compile-time checked query here...
+    sqlx::query(create_challenges_string).execute(&mut ***db).await?;
+    sqlx::query(create_transactions_string).execute(&mut ***db).await?;
+    sqlx::query(create_completed_transactions_string).execute(&mut ***db).await?;
 
-        if let Err(e) = client.execute(create_transactions_string, &[]).await {
-        eprintln!("Error creating transactions table: {}", e);
-    }
-
-        if let Err(e) = client.execute(create_completed_transactions_string, &[]).await {
-        eprintln!("Error creating completed_transactions table: {}", e);
-    }
+    Ok(())
 }

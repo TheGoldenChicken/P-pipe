@@ -1,9 +1,16 @@
 # To enter db: 
 # docker exec -it ppipe_db psql -U postgres
-# \dt
+# sudo docker exec -it ppipe_test_db psql -U postgres -d test_db
 
 # To list db running:
 # docker ps -a
+
+# TODO: Probably wanna change:
+  # - USER
+  # - PASSWORD
+  # PORTS?
+  # POSTGRES_DB for "prod"
+
 
 services:
   db:
@@ -17,6 +24,18 @@ services:
       POSTGRES_DB: postgres
     volumes:
       - pgdata:/var/lib/postgresql/data
-  
+  test_db:
+    container_name: ppipe_test_db
+    image: postgres:12
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: test_db
+    volumes:
+      - pgtestdata:/var/lib/postgresql/data
+
 volumes:
   pgdata: {}
+  pgtestdata: {}
