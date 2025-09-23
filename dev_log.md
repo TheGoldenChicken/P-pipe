@@ -144,3 +144,21 @@ A lot of the issues that I had today with types and rust to postgres and whatnot
 Got a ton of TODO's that I really need to look at at some point, really before I clean it up.
 
 Next time, will clean up a bit more, work on creating tests for all endpoints with reasonable parameters
+
+
+# 23-09-2025:
+Worked on migrating to sqlx, worked well enough, there were some hiccups though.
+There is a bit of unknown stuff about query! (macro in sqlx), since it works by performing compile-time checking. Which is nice.
+However, that requires an active connection to the database, something that *might* be set through an environment variable DATABASE_URL, but I'm not sure.
+It complained a lot in the beginning, then not really, even though I'm doing things that should make it angry... Not sure why it tolerates that
+    - Basically, a lot of the issues were with non nullable columns in Postgres becoming Option<T> in Rust, it didn't like that one bit...
+    -But it works
+
+Encountered some problems trying to get table_initialization to actually work. Don't really know how modules work together in Rust... Would have to make something run on startup of the backend, and with that, I might as well wait until I learn how to do migration stuff. That's what they did in the Rocket example
+
+Right now the "unit integration tests" (they're not really testing all that much, so unit test feels more correct), expect a clean database.
+So I need to set up a testing database, one that I won't feel bad deleting everything from every time it spins up for testing.
+Might do that through rocket.toml? Maybe.
+
+Also need to consider if it really is good to "chain" my tests together? What if the create challenges test fails to delete stuff afterwards, and then the get_challenges fails afterwards because getting from empty db should yield empty list? 
+Have to look into sqlx (or pure postgres stuff) for rolling back all operations, so a test can clean up after itself...
