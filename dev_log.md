@@ -205,3 +205,14 @@ Wrote tests for POST challenges
 Wrote unit testing for create_transactions_from_challenge
 Also did *prop testing* for this. Prop testing is this really cool thing, where it'll create properties to try and make your test fail. You test by property ranges instead of specific cases. Nice. Gotta have me some more of those.
 Also decided to rewrite how main.rs creates a rocket. It is no longer with `Rocket::build()`, decided to re-use `rocket::from_config(rocket::Config::figment())`, since this is the way I do it in tests, and I wanna be (I guess [idiomatic](https://www.google.com/search?client=firefox-b-d&channel=entpr&q=idiomatic%20meaning)?) in that way.
+
+Did some cleaning up of Git branches and whatnot VERY carefully, didn't wanna fuck anything up.
+Probably gonna be some dumbass commits I need to cherry-pick in the future
+Need to take a backup of the repo every now and then... just in case. 
+
+Gonna start work on drive data dispatcher next time, writing tests for that and all... Should be significantly easier than Rust backend... SHOULD be...
+
+Also moved around the uv .venv, which made uv act up going "I can't find the fucking .venv file!", fixed it by running `export VIRTUAL_ENV=$(pwd)/.venv`, probably a stupid fix, probably won't last. Might need to redo uv environment (from .lock file, so easy?), although I have no idea where uv stores the current directory's VIRTUAL_ENV variable?
+
+UPDATE: Right now, it appears uv doesn't have any active VIRTUAL_ENV variable, yet I can still run `uv add pytest` from ppipe/dispatcher/, but not from ppipe/, so it may be fixed? Who knows!
+
