@@ -1,5 +1,5 @@
 # To enter db: 
-# docker exec -it ppipe_db psql -U postgres
+# sudo docker exec -it ppipe_db psql -U postgres
 # sudo docker exec -it ppipe_test_db psql -U postgres -d test_db
 
 # To list db running:
@@ -28,7 +28,7 @@ services:
     container_name: ppipe_test_db
     image: postgres:12
     ports:
-      - "5433:5432"
+      - "5434:5433"
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres

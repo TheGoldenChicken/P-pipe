@@ -1,14 +1,21 @@
 use rocket::{response::status::Custom, http::Status};
+use rocket::{delete, fairing, get, post, routes, Build, Rocket}; // Have to do this as long as src/lib.rs contains `pub mod endpoints;`, as it breaks #[macro_use]
 use rocket::fairing::AdHoc;
 use rocket::serde::{Serialize, Deserialize, json::Json};
 use rocket_db_pools::{Database, Connection};
-use sqlx::Arguments;
+use sqlx::{pool, Arguments, PgPool};
+use rocket::{figment::Figment};
+
+// TODO: Consider if it makes sense to use a static migrator to avoid re-parsing the migrations each time
+// static MIGRATOR: Migrator = sqlx::migrate!("backend/migrations");
+
 // TODO: Consider if we should do away with the whole Custom<String> Type and instead just use tokio_postgres::Error?
 // TODO: Consider if we should look into a way of having custom return messages... what if we want to show both challenges affected, AND transactions?
 
 // TODO: Consider if it even makes sense to have this here, we use it in more places, but it is also so little code, sooooooo?
 #[derive(Database)]
 #[database("postgres_db")]
+// #[database("postgres_tes")]
 pub struct Db(sqlx::PgPool);
 
 type Result<T, E = rocket::response::Debug<sqlx::Error>> = std::result::Result<T, E>;
@@ -241,11 +248,75 @@ async fn delete_transaction(mut db: Connection<Db>, id: i32) -> Result<Status, C
     Ok(Status::NoContent)
 }
 
+#[delete("/api/challenges")]
+async fn destroy_challenges(mut db: Connection<Db>) -> Result<()> {
+    sqlx::query!("DELETE FROM challenges").execute(&mut **db).await?;
+
+    Ok(())
+}
+
+#[delete("/api/transactions")]
+async fn destroy_transactions(mut db: Connection<Db>) -> Result<()> {
+    sqlx::query!("DELETE FROM transactions").execute(&mut **db).await?;
+
+    Ok(())
+}
 
 pub fn stage() -> AdHoc {
     AdHoc::on_ignite("SQLx Stage", |rocket| async {
         rocket.attach(Db::init())
             // .attach(AdHoc::try_on_ignite("SQLx Migrations", run_migrations))
-            .mount("/", routes![add_challenge, get_challenges, delete_challenge, get_transactions, delete_transaction])
+            .mount("/", routes![add_challenge, get_challenges, delete_challenge, destroy_challenges, get_transactions, delete_transaction])
     })
+}
+
+// pub fn manage_pool(pool: PgPool) -> Rocket<Build> {
+//     rocket::build()
+//         .manage(pool.clone()) // inject the test pool
+//         .mount("/", routes![add_challenge, get_challenges, delete_challenge, destroy_challenges, get_transactions, delete_transaction])
+// }
+
+pub fn test_stage(pool: PgPool) -> AdHoc {
+    AdHoc::on_ignite("Inject test PgPool", move |rocket| async move {
+        rocket
+            .attach(Db::init())
+            .manage(pool)
+            .mount("/", routes![
+                add_challenge,
+                get_challenges,
+                delete_challenge,
+                destroy_challenges,
+                get_transactions,
+                delete_transaction
+            ])
+    })
+}
+
+async fn run_migrations(rocket: Rocket<Build>) -> fairing::Result {
+    match Db::fetch(&rocket) {
+        Some(db) => match sqlx::migrate!("src/migrations").run(&**db).await {
+            Ok(_) => Ok(rocket),
+            Err(e) => {
+                eprintln!("Failed to initialize SQLx database: {}", e);
+                Err(rocket)
+            }
+        },
+        None => Err(rocket),
+    }
+}
+
+
+// TODO: Find out if there is a way to return rocket::AdHoc so we can Rocket::build() later?
+pub fn rocket_from_config(figment: Figment) -> Rocket<Build> {
+    rocket::custom(figment)
+        .attach(Db::init())
+        .attach(AdHoc::try_on_ignite("SQLx Migrations", run_migrations))
+        .mount("/", routes![
+            add_challenge,
+            get_challenges,
+            delete_challenge,
+            destroy_challenges,
+            get_transactions,
+            delete_transaction
+        ])
 }
