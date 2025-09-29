@@ -1,3 +1,9 @@
+# Vscode settings
+.vscode/
+
+# Rust build artifacts
+target/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
