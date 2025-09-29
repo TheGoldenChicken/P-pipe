@@ -1,0 +1,11 @@
+[project]
+name = "ppipe"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "click>=8.2.1",
+    "pandas>=2.3.2",
+    "pytest>=8.4.2",
+]
