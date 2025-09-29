@@ -8,6 +8,7 @@ bytes = "1.10.1"
 dotenv = "0.15.0"
 postgres = "0.19.10"
 postgres-types = { version = "0.2.9", features = ["derive"] }
+proptest = "1.8.0"
 rocket = { version = "0.5.1", features = ["json"] }
 rocket_cors = { version = "0.6.0", default-features = false }
 rocket_db_pools = { version = "0.1", features = ["sqlx_postgres"] }

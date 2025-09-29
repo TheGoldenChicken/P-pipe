@@ -1,10 +1,9 @@
-use rocket::{response::status::Custom, http::Status};
 use rocket::{delete, fairing, get, post, routes, Build, Rocket}; // Have to do this as long as src/lib.rs contains `pub mod endpoints;`, as it breaks #[macro_use]
-use rocket::fairing::AdHoc;
+use rocket::{fairing::AdHoc, figment::Figment, response::status::Custom, http::Status};
 use rocket::serde::{Serialize, Deserialize, json::Json};
+
 use rocket_db_pools::{Database, Connection};
-use sqlx::{pool, Arguments, PgPool};
-use rocket::{figment::Figment};
+use sqlx::Arguments;
 
 // TODO: Consider if it makes sense to use a static migrator to avoid re-parsing the migrations each time
 // static MIGRATOR: Migrator = sqlx::migrate!("backend/migrations");
@@ -21,33 +20,44 @@ pub struct Db(sqlx::PgPool);
 type Result<T, E = rocket::response::Debug<sqlx::Error>> = std::result::Result<T, E>;
 
 
-#[derive(Serialize, Deserialize, Clone, sqlx::FromRow)]
+#[derive(Serialize, Deserialize, Clone, sqlx::FromRow, Debug, PartialEq)]
 pub struct Challenge {
     // "Bookkeeping fields"
-    id: Option<i32>,
-    name: String,
-    created_at: Option<i64>,
-    init_dataset_location: String,
-    init_dataset_rows: i32,
-    init_dataset_name: Option<String>,
-    init_dataset_description: Option<String>,
+    pub id: Option<i32>,
+    pub name: String,
+    pub created_at: Option<i64>,
+    pub init_dataset_location: String,
+    pub init_dataset_rows: i32,
+    pub init_dataset_name: Option<String>,
+    pub init_dataset_description: Option<String>,
 
     // Option fields
-    time_of_first_release: i64,
-    release_proportions: Vec<f64>,
-    time_between_releases: i64,
+    pub time_of_first_release: i64,
+    pub release_proportions: Vec<f64>,
+    pub time_between_releases: i64,
 }
 #[derive(Serialize, Deserialize, Clone, Debug, sqlx::FromRow)]
 
-struct Transaction {
-    id: Option<i32>,
-    challenge_id: i32,
-    created_at: Option<i64>,
-    scheduled_time: i64,
-    source_data_location: String,
-    data_intended_location: String,
-    rows_to_push: Vec<i32>,
+pub struct Transaction {
+    pub id: Option<i32>,
+    pub challenge_id: i32,
+    pub created_at: Option<i64>,
+    pub scheduled_time: i64,
+    pub source_data_location: String,
+    pub data_intended_location: String,
+    pub rows_to_push: Vec<i32>,
 }
+// Custom partialEq function so we can test if transactions from the db (with id and created_at) match those we expect to create (from transactions_from_challenge)
+impl PartialEq for Transaction {
+    fn eq(&self, other: &Self) -> bool {
+        self.challenge_id == other.challenge_id &&
+        self.scheduled_time == other.scheduled_time &&
+        self.source_data_location == other.source_data_location &&
+        self.data_intended_location == other.data_intended_location &&
+        self.rows_to_push == other.rows_to_push
+    }
+}
+
 
 
 
@@ -160,7 +170,8 @@ async fn add_transactions_into_db(
 }
 
 
-fn transactions_from_challenge(challenge: Challenge) -> Vec<Transaction> {
+// TODO: Make unit-test testing this for correct behavior!
+pub fn transactions_from_challenge(challenge: Challenge) -> Vec<Transaction> {
     let mut transactions = Vec::new();
 
     let mut running_proportion: f64 = 0.;
@@ -262,36 +273,6 @@ async fn destroy_transactions(mut db: Connection<Db>) -> Result<()> {
     Ok(())
 }
 
-pub fn stage() -> AdHoc {
-    AdHoc::on_ignite("SQLx Stage", |rocket| async {
-        rocket.attach(Db::init())
-            // .attach(AdHoc::try_on_ignite("SQLx Migrations", run_migrations))
-            .mount("/", routes![add_challenge, get_challenges, delete_challenge, destroy_challenges, get_transactions, delete_transaction])
-    })
-}
-
-// pub fn manage_pool(pool: PgPool) -> Rocket<Build> {
-//     rocket::build()
-//         .manage(pool.clone()) // inject the test pool
-//         .mount("/", routes![add_challenge, get_challenges, delete_challenge, destroy_challenges, get_transactions, delete_transaction])
-// }
-
-pub fn test_stage(pool: PgPool) -> AdHoc {
-    AdHoc::on_ignite("Inject test PgPool", move |rocket| async move {
-        rocket
-            .attach(Db::init())
-            .manage(pool)
-            .mount("/", routes![
-                add_challenge,
-                get_challenges,
-                delete_challenge,
-                destroy_challenges,
-                get_transactions,
-                delete_transaction
-            ])
-    })
-}
-
 async fn run_migrations(rocket: Rocket<Build>) -> fairing::Result {
     match Db::fetch(&rocket) {
         Some(db) => match sqlx::migrate!("src/migrations").run(&**db).await {
@@ -305,7 +286,6 @@ async fn run_migrations(rocket: Rocket<Build>) -> fairing::Result {
     }
 }
 
-
 // TODO: Find out if there is a way to return rocket::AdHoc so we can Rocket::build() later?
 pub fn rocket_from_config(figment: Figment) -> Rocket<Build> {
     rocket::custom(figment)
@@ -317,6 +297,102 @@ pub fn rocket_from_config(figment: Figment) -> Rocket<Build> {
             delete_challenge,
             destroy_challenges,
             get_transactions,
-            delete_transaction
+            delete_transaction,
+            destroy_transactions
         ])
+}
+
+
+#[cfg(test)]
+mod tests {
+    use proptest::prelude::{proptest, prop, prop_assert_eq};
+    // TODO: Remove here, and only import specifcally what is asked for!
+    use super::*;
+    
+    #[test]
+    // TODO: Consider naming convention here, should we really call it basic(), edge_case, invalid_input, etc.?
+    fn test_transactions_from_challenge_basic() {
+        let challenge = Challenge {
+            id: Some(42),
+            name: "Test Challenge".into(),
+            created_at: None,
+            init_dataset_location: "s3://bucket/data.csv".into(),
+            init_dataset_rows: 100,
+            init_dataset_name: Some("dataset".into()),
+            init_dataset_description: Some("desc".into()),
+            time_of_first_release: 1000,
+            release_proportions: vec![0.3, 0.4, 0.3],
+            time_between_releases: 60,
+        };
+
+        let transactions = transactions_from_challenge(challenge.clone());
+
+        assert_eq!(transactions.len(), 3, "Expected 3 transactions");
+
+        let expected = vec![
+            Transaction {
+                id: None,
+                challenge_id: 42,
+                created_at: None,
+                scheduled_time: 1000,
+                source_data_location: challenge.init_dataset_location.clone(),
+                data_intended_location: "release_0".into(),
+                rows_to_push: vec![0, 30],
+            },
+            Transaction {
+                id: None,
+                challenge_id: 42,
+                created_at: None,
+                scheduled_time: 1060,
+                source_data_location: challenge.init_dataset_location.clone(),
+                data_intended_location: "release_1".into(),
+                rows_to_push: vec![30, 70],
+            },
+            Transaction {
+                id: None,
+                challenge_id: 42,
+                created_at: None,
+                scheduled_time: 1120,
+                source_data_location: challenge.init_dataset_location.clone(),
+                data_intended_location: "release_2".into(),
+                rows_to_push: vec![70, 100],
+            },
+        ];
+
+        assert_eq!(transactions, expected, "Transaction output mismatch");
+    }
+
+    proptest! {
+        #[test]
+        fn total_rows_pushed_is_100(proportions in prop::collection::vec(0.0..1.0, 1..10)) {
+            // In case of proportion of only 1, will create vector of normalized proportion of [1.0]!
+            let total: f64 = proportions.iter().sum();
+            let normalized: Vec<f64> = if total == 0.0 {
+                vec![1.0] // fallback to avoid division by zero
+            } else {
+                proportions.iter().map(|p| p / total).collect()
+            };
+
+            let challenge = Challenge {
+                id: Some(1),
+                name: "test".into(),
+                created_at: None,
+                init_dataset_location: "s3://bucket/data.csv".into(),
+                init_dataset_rows: 100,
+                init_dataset_name: None,
+                init_dataset_description: None,
+                time_of_first_release: 0,
+                release_proportions: normalized.clone(),
+                time_between_releases: 1,
+            };
+
+            let transactions = transactions_from_challenge(challenge);
+
+            let total_rows: i32 = transactions.iter()
+                .map(|t| t.rows_to_push[1] - t.rows_to_push[0])
+                .sum();
+            prop_assert_eq!(total_rows, 100, "Expected total rows to be 100, got {}", total_rows);
+        }
+    }
+
 }

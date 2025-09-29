@@ -1,109 +1,24 @@
-use rocket::fairing::AdHoc;
-// use rocket::local::blocking::Client;
+use rocket::figment::{map, value::{Map, Value}};
 use rocket::local::asynchronous::Client;
-use rocket::serde::{Serialize, Deserialize};
 use rocket::http::Status;
-use sqlx::test;
-use sqlx::{PgPool, Row};
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
-use backend::endpoints::dispatcher::{stage, test_stage, rocket_from_config};
-
-#[derive(Serialize, Deserialize, Clone, sqlx::FromRow, Debug)]
-pub struct Challenge {
-    // "Bookkeeping fields"
-    id: Option<i32>,
-    name: String,
-    created_at: Option<i64>,
-    init_dataset_location: String,
-    init_dataset_rows: i32,
-    init_dataset_name: Option<String>,
-    init_dataset_description: Option<String>,
-
-    // Option fields
-    time_of_first_release: i64,
-    release_proportions: Vec<f64>,
-    time_between_releases: i64,
-}
-
-    use rocket::{
-        figment::{
-            map,
-            value::{Map, Value},
-        },
-        http::ContentType,
-        local::asynchronous::{LocalResponse},
-        serde::{
-            json::{from_str, serde_json::json},
-        },
-        uri,
-    };
-// Challenges endpoints tests:
-
-// Test create challenges
-// Create challenge - then delete afterwards
-
-// Test Get challenges
-    // - Should yield empty when no users
-    // - Create bunch of users
-        // - Get should then return all created
-        // - Their values, matching what was meant to be created
-
-// Test delete
-// Create challenge - then test
-    // - Should remove challenge that was created
-    // - Should remove all transactions as well
-    // - Should only affect one row in challenges!
+use backend::endpoints::dispatcher::{rocket_from_config, Challenge, Transaction, transactions_from_challenge};
 
 
-// Create users many times - then test
-    // - Challenges should be empty
-    // - Transactions should be empty
-// #[test]
-// fn test_delete() {
-//     test("/", crate::dispatcher::stage())
-// }
+// TODO: Consider if there isn't a way to use Rocket::local::blocking::Client for testing endpoints...
 
-// #[test]
-// fn test_destroy() {
-//     test("/", crate::dispatcher::stage())
-// }
-
-
-// #[sqlx::test]
-// async fn basic_test() -> sqlx::Result<()> {
-
-//     // TODO: Creates test for DATABASE_URL being sat here, sqlx::test needs it!
-
-//     let sqlx_stage = stage();
-//     let rocket = rocket::build().attach(sqlx_stage);
-//     let client = Client::untracked(rocket).await.expect("some error happened");
-
-//     // let client = Client::untracked(rocket::build().attach(sqlx_stage)).unwrap();
-    
-//     let base_challenges = "/api/challenges";
-//     let base_transactions = "/api/transactions";
-
-//     assert_eq!(client.delete(base_challenges).dispatch().await.status(), Status::Ok);
-//     // assert_eq!(client.get(base).dispatch().into_json::<Vec<i64>>(), Some(vec![]));
-//     Ok(())
-// }
-
+// TODO: Move this async_client_From_pg_connect_options to something else... maybe helper functions or something? Probably a common.rs script or smth...
 pub async fn async_client_from_pg_connect_options(
     pg_connect_options: PgConnectOptions,
 ) -> Client {
-    // let db_url = format!(
-    //     "postgres://postgres:postgres@localhost:5432/{}",
-    //     pg_connect_options.get_database().unwrap()
-    // );
-    println!("{:?}", pg_connect_options.get_database().clone().unwrap());
-
+    // TODO: Consider if it is important to have such a 'comprehensive' format! here, or if we can do something like format!"postgres://postgres:postgres@localhost:5432/{}"
     let db_url = format!(
-    "postgres://{}:{}@{}:{}/{}",
-    pg_connect_options.get_username(),
-    "postgres",
-    pg_connect_options.get_host(),
-    pg_connect_options.get_port(),
-    pg_connect_options.get_database().unwrap()
+        "postgres://{}:{}@{}:{}/{}",
+        pg_connect_options.get_username(),
+        "postgres",
+        pg_connect_options.get_host(),
+        pg_connect_options.get_port(),
+        pg_connect_options.get_database().unwrap()
     );
 
     let db_config: Map<_, Value> = map! {
@@ -116,26 +31,24 @@ pub async fn async_client_from_pg_connect_options(
     let figment: rocket::figment::Figment = rocket::Config::figment()
         .merge(("databases", map!["postgres_db" => db_config]));
 
-    println!("{:?}", figment);
     // rocket_from_config is just helper function that returns rocket<Build> https://github.com/madoke/configmonkey/blob/main/src/app.rs
     let client = Client::tracked(rocket_from_config(figment))
         .await
         .expect("valid rocket instance");
 
-    println!("{:?}", client);
-
     return client;
 }
 
+// TODO: perhaps remove this, we already test for it in the other functions
 #[sqlx::test]
-async fn create_config_success(
+async fn challenge_post_sucess(
     _: PgPoolOptions,
     pg_connect_options: PgConnectOptions,
 ) -> sqlx::Result<()> {
-    println!("{:?}", pg_connect_options.clone());
 
     let client = async_client_from_pg_connect_options(pg_connect_options).await;
     let base_challenges = "/api/challenges";
+    // TODO: Perhaps move this challenge to a function that returns it...
     let post = Challenge {
         id: None,
         created_at: None,
@@ -149,121 +62,120 @@ async fn create_config_success(
         time_between_releases: 100
     };
 
-    let response = client.post(base_challenges).json(&post).dispatch().await.into_json::<Challenge>();
-    println!("{:?}", response.await);
+    let response = client.post(base_challenges)
+    .json(&post)
+    .dispatch()
+    .await;
+
+    assert_eq!(response.status(), Status::Ok, "Expected success status, got {:?}", response.status());
 
     Ok(())
 }
 
 
+#[sqlx::test]
+async fn challenge_post_posts_something(
+    _: PgPoolOptions,
+    pg_connect_options: PgConnectOptions,
+) -> sqlx::Result<()> {
 
-// use rocket::{delete, get, post, routes, Build, Rocket}; // Have to do this as long as src/lib.rs contains `pub mod endpoints;`, as it breaks #[macro_use]
-// use rocket_db_pools::{Database, Connection};
-// use sqlx::Arguments;
+    let pool = PgPoolOptions::new()
+    .connect_with(pg_connect_options.clone())
+    .await?;
 
-// #[derive(Database)]
-// #[database("postgres_db")]
-// // pub struct Db(sqlx::PgPool);
+    let client = async_client_from_pg_connect_options(pg_connect_options).await;
+    let base_challenges = "/api/challenges";
 
-// #[sqlx::test]
-// async fn pool_basic_test(pool: PgPool) -> sqlx::Result<()> {
-//     // let mut conn = pool.acquire().await?;
-//     // TODO: Creates test for DATABASE_URL being sat here, sqlx::test needs it!
+    let post = Challenge {
+        id: None,
+        created_at: None,
+        name: String::from("testing_challenge"),
+        init_dataset_location: String::from("/home/cicero/ppipe/tests/test_data/iris.csv"),
+        init_dataset_rows: 300,
+        init_dataset_name: Some(String::from("iris")),
+        init_dataset_description: Some(String::from("a .csv collection of flowers, classification task")),
+        time_of_first_release: 5000,
+        release_proportions: vec![0.50, 0.25],
+        time_between_releases: 100
+    };
 
-//     // let rocket = rocket::build()
-//     //     .manage(pool.clone())
-//     //     .mount("/", routes![add_challenge, get_challenges, delete_challenge, destroy_challenges, get_transactions, delete_transaction]);
+    let response = client.post(base_challenges)
+    .json(&post)
+    .dispatch()
+    .await;
 
-//     let sqlx_stage = test_stage(pool.clone());
-//     let rocket = rocket::build().attach(sqlx_stage);
-//     let client = Client::untracked(rocket).await.expect("some error happened");
+    assert_eq!(response.status(), Status::Ok, "Expected success status, got {:?}", response.status());
 
-//     // let client = Client::untracked(rocket::build().attach(sqlx_stage)).unwrap();
+    let response = response.into_json::<Vec<Challenge>>()
+    .await
+    .expect("Failed to deserialize Challenge response");
     
-//     let base_challenges = "/api/challenges";
-//     let base_transactions = "/api/transactions";
+    let db_challenges: Vec<Challenge> = sqlx::query_as::<_, Challenge>("SELECT * FROM challenges")
+    .fetch_all(&pool)
+    .await?;
+    
+    if db_challenges.is_empty() {
+        panic!("No challenges found in db after POST")
+    }
 
-//     // assert_eq!(client.delete(base_challenges).dispatch().await.status(), Status::Ok);
-//     let post = Challenge {
-//         id: None,
-//         created_at: None,
-//         name: String::from("testing_challenge"),
-//         init_dataset_location: String::from("/home/cicero/ppipe/tests/test_data/iris.csv"),
-//         init_dataset_rows: 300,
-//         init_dataset_name: Some(String::from("iris")),
-//         init_dataset_description: Some(String::from("a .csv collection of flowers, classification task")),
-//         time_of_first_release: 5000,
-//         release_proportions: vec![0.50, 0.25],
-//         time_between_releases: 100
-//     };
+    assert_eq!(db_challenges, response, "Expected challenge POST response to be the same as what was posted to db!");
 
-//     let response = client.post(base_challenges).json(&post).dispatch().await.into_json::<Challenge>();
-
-//     // assert_eq!(client.get(base).dispatch().into_json::<Vec<i64>>(), Some(vec![]));
-//     Ok(())
-// }
+    Ok(())
+}
 
 
-// #[sqlx::test]
-// async fn my_test_case(
-//   _pg_pool_options: PgPoolOptions,
-//   pg_connect_options: PgConnectOptions,
-// ) -> sqlx::Result<()> {
-//   let client = async_client_from_pg_connect_options(pg_connect_options).await;
-//   ...
+#[sqlx::test]
+async fn challenge_post_posts_to_transactions(
+    _: PgPoolOptions,
+    pg_connect_options: PgConnectOptions,
+) -> sqlx::Result<()> {
 
-// }
-// fn test(base: &str, stage: AdHoc) {
-//     // NOTE: If we had more than one test running concurrently that dispatches
-//     // DB-accessing requests, we'd need transactions or to serialize all tests.
-//     let client = Client::tracked(rocket::build().attach(stage)).unwrap();
+    let pool = PgPoolOptions::new()
+    .connect_with(pg_connect_options.clone())
+    .await?;
 
-//     // Clear everything from the database.
-//     assert_eq!(client.delete(base).dispatch().status(), Status::Ok);
-//     assert_eq!(client.get(base).dispatch().into_json::<Vec<i64>>(), Some(vec![]));
+    let client = async_client_from_pg_connect_options(pg_connect_options).await;
+    let base_challenges = "/api/challenges";
 
-//     // // Add some random posts, ensure they're listable and readable.
-//     // for i in 1..=N{
-//     //     let title = format!("My Post - {}", i);
-//     //     let text = format!("Once upon a time, at {}'o clock...", i);
-//     //     let post = Post { title: title.clone(), text: text.clone() };
+    let post = Challenge {
+        id: None,
+        created_at: None,
+        name: String::from("testing_challenge"),
+        init_dataset_location: String::from("/home/cicero/ppipe/tests/test_data/iris.csv"),
+        init_dataset_rows: 300,
+        init_dataset_name: Some(String::from("iris")),
+        init_dataset_description: Some(String::from("a .csv collection of flowers, classification task")),
+        time_of_first_release: 5000,
+        release_proportions: vec![0.50, 0.25],
+        time_between_releases: 100
+    };
 
-//     //     // Create a new post.
-//     //     let response = client.post(base).json(&post).dispatch().into_json::<Post>();
-//     //     assert_eq!(response.unwrap(), post);
 
-//     //     // Ensure the index shows one more post.
-//     //     let list = client.get(base).dispatch().into_json::<Vec<i64>>().unwrap();
-//     //     assert_eq!(list.len(), i);
+    let response = client.post(base_challenges)
+    .json(&post)
+    .dispatch()
+    .await;
 
-//     //     // The last in the index is the new one; ensure contents match.
-//     //     let last = list.last().unwrap();
-//     //     let response = client.get(format!("{}/{}", base, last)).dispatch();
-//     //     assert_eq!(response.into_json::<Post>().unwrap(), post);
-//     // }
+    assert_eq!(response.status(), Status::Ok, "Expected success status, got {:?}", response.status());
 
-//     // // Now delete all of the posts.
-//     // for _ in 1..=N {
-//     //     // Get a valid ID from the index.
-//     //     let list = client.get(base).dispatch().into_json::<Vec<i64>>().unwrap();
-//     //     let id = list.first().expect("have post");
+    let response = response.into_json::<Vec<Challenge>>()
+    .await
+    .expect("Failed to deserialize Challenge response")
+    .get(0)
+    .cloned()
+    .expect("No challenge returned from POST!");
 
-//     //     // Delete that post.
-//     //     let response = client.delete(format!("{}/{}", base, id)).dispatch();
-//     //     assert_eq!(response.status(), Status::Ok);
-//     // }
+    let expected_transactions = transactions_from_challenge(response);
 
-//     // // Ensure they're all gone.
-//     // let list = client.get(base).dispatch().into_json::<Vec<i64>>().unwrap();
-//     // assert!(list.is_empty());
+    let db_transactions: Vec<Transaction> = sqlx::query_as::<_, Transaction>("SELECT * FROM transactions")
+    .fetch_all(&pool)
+    .await?;
+    
+    if db_transactions.is_empty() {
+        panic!("No transactions found in db after POST api/challenges")
+    }
 
-//     // // Trying to delete should now 404.
-//     // let response = client.delete(format!("{}/{}", base, 1)).dispatch();
-//     // assert_eq!(response.status(), Status::NotFound);
-// }
+    assert_eq!(db_transactions, expected_transactions, "Expected db transactions after POST api/challenges to match expected transactions from transactions_from_challenge!");
 
-// #[test]
-// fn test_sqlx() {
-//     test("/", crate::dispatcher::stage())
-// }
-
+    Ok(())
+}
