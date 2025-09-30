@@ -133,5 +133,13 @@ if __name__ == "__main__":
             0,
             150
         ],
-        "dispatcher": "drive"
+        "dispatcher": "drive",
+        "share_information": {
+        "type": "user",
+        "role": "reader",
+        "emailAddress": "dderpson99@gmail.com"
     }
+    }
+
+# test with
+# python py_modules/orchestrator.py --transaction '{"id":11,"challenge_id":4,"created_at":1758633913,"scheduled_time":5000,"source_data_location":"/home/cicero/ppipe/py_modules/tests/test_data/iris.csv","data_intended_location":"test_release","rows_to_push":[0,150],"dispatcher":"drive","share_information":{"type":"user","role":"reader","emailAddress":"dderpson99@gmail.com"}}'
