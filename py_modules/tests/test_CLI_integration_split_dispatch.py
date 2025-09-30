@@ -4,8 +4,8 @@ from pathlib import Path
 from click.testing import CliRunner
 
 from module.file_splitter import split_csv_by_proportions_cmd
-from module.dispatcher import simple_dispatcher_cmd
-
+from dispatcher.module.dispatcher import simple_dispatcher_cmd
+from dispatcher.drive_dispatcher import drive_dispatcher
 
 # tmp_path_factory needed to create a tmp_path that is usuable for the session
 # ... necessary for one test to test the output of another test...

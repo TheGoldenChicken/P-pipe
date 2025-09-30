@@ -20,22 +20,31 @@ def oauth2_or_token_authentication():
 
     except FileNotFoundError:
         raise("No GOOGLE_CREDENTIALS and/or GOOGLE_TOKEN path found, is you .env file present?")
-
+    
+    retry_creds = False
+    
     # Load existing credentials if available
     creds = None
     if os.path.exists(token_path):
-        logging.info(f"Credentials file found at {token_path}")
+        logging.info(f"Drive token file found at {token_path}")
         creds = Credentials.from_authorized_user_file(token_path, SCOPES)
 
-    # If no valid credentials, run the flow
-    if not creds or not creds.valid:
-        logging.warning("No valid credentials found" if not creds.valid else "Credentials found were not valid")
+        if creds.valid:
+            logging.warning("Token found was not valid")
+            retry_creds = True
+    else:
+        logging.warning(f"No token file found at {token_path}")
+        retry_creds = True
 
+    # If no valid credentials, run the flow
+    if retry_creds:
         if creds and creds.expired and creds.refresh_token:
             logging.info("Credentials expired, refreshing")
             creds.refresh(Request())
         else:
             logging.warning("Credentials expired and unable to refresh, or not present at all. Manual oauth2 necessary!")
+            if not os.path.exists(creds_path):
+                raise FileNotFoundError(f"No google credentials found at {creds_path}! Cannot continue with oauth2")
             flow = InstalledAppFlow.from_client_secrets_file(creds_path, SCOPES)
             creds = flow.run_local_server(port=0)
 

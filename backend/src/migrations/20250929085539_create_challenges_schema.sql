@@ -16,6 +16,9 @@ CREATE TABLE IF NOT EXISTS challenges (
     time_between_releases BIGINT NOT NULL -- Should be given in seconds
 );    
 
+
+-- For transactions, we really want something to automatically generate names for different data parts like a uuid or something?
+
 CREATE TABLE IF NOT EXISTS transactions (
     -- Bookkeeping fields
     id SERIAL PRIMARY KEY,
