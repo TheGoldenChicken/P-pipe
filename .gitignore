@@ -1,3 +1,7 @@
+# Various credentials and secrets for the PDD and PDF
+dispatcher/secrets/
+.env
+
 # Vscode settings
 .vscode/
 
