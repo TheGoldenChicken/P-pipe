@@ -229,6 +229,7 @@ Created credentials file (that will most certainly not get pushed to Github)
 The credentials can be used for oauth2 login. From here, was also possbile to create a token file so as long as we have that, and it is not expired, we can keep using it.
 Should set up some headless way of doing it. There is something something about authorized users and whatnot, didn't look into it.
 Bundled the whole drive access thing to two functions and one file.
+oauth2 also requires that you use chrome, otherwise doesn't work (fucking shit)
 
 Worked on data dispatcher.
 Discovered that drive doesn't care about folder names, but goes by folder_ids. Might cause problems
@@ -269,6 +270,7 @@ Next time, will work on cleaning, writing unittests and integration tests.
 Then will work on what to show Nicki for next meeting, as well as what questions we may have.
 Then will work on more unittesting and integration testing for backend module.
 Merge drive branch into main and such...
+**Uninstall chrome**
 
 All code works. Have made it a point to have each commit work code-wise. 
 Christian mentioned something something makes regression to another branch automatic-ish testing possible and good. Ask him about it
