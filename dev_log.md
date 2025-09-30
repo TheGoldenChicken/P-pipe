@@ -216,3 +216,63 @@ Also moved around the uv .venv, which made uv act up going "I can't find the fuc
 
 UPDATE: Right now, it appears uv doesn't have any active VIRTUAL_ENV variable, yet I can still run `uv add pytest` from ppipe/dispatcher/, but not from ppipe/, so it may be fixed? Who knows!
 
+# 30-09-2025
+
+Solid day, lotta stuff got done. Should have written during the day. Oh well.
+
+Worked on drive data dispatcher from scratch. 
+
+Took a little work and finagling to get it to work with Google drive. Since you have to set up API access and such. 
+Created a new project in google Cloud so I don't use mlops project.
+Set billing limit to 200 kr (playing it safe)
+Created credentials file (that will most certainly not get pushed to Github)
+The credentials can be used for oauth2 login. From here, was also possbile to create a token file so as long as we have that, and it is not expired, we can keep using it.
+Should set up some headless way of doing it. There is something something about authorized users and whatnot, didn't look into it.
+Bundled the whole drive access thing to two functions and one file.
+
+Worked on data dispatcher.
+Discovered that drive doesn't care about folder names, but goes by folder_ids. Might cause problems
+Considered making challenges intended_data_location create some kind of uuid_extension so we're sure there is no overlap between them.
+    This is also good for testing
+There may be a workaround by switching up the backend.
+For now, when the dispathcher finds an already existing folder, it just assumes it can safely dispatch to that folder.
+Otherwise, it'll create the folder and update permissions.
+But should probably separate logic of **initialization of challenges** from **dispatching data to challenges**. In Drive its forgiving, elsewhere it may not be.
+If two or more folders exist, it fails, however (on purpose, nice).
+Uploads as an io bistream thingy, but that is so we don't need to save a local copy of .csv and whatnot when we upload.
+
+Thought about getting multiple fetchers, may be redudant, we can just force users to upload to a specific location, shouldn't be a problem.
+
+Decided on making a python orchestraot which deconstructs a transaction JSON, finds and uses uses the correct fetcher, finds the correct dispatcher and calls it.
+This isn't exactly in line with what we thought that we coudl just take a failed transaction and add it straight to unit testing the dispathcer, that way ensuring us against regressions.
+But as long as we keep a working orchestrator (through good unit testing), shoudln't be a problem.
+Also allows us to standardize, and add more logic to how we handle arguments in the JSON. 
+Also requires we only write one CLI
+Simplifies Rust code (only has to call one CLI)
+Simplifies integration tests (only one CLI)
+Does add *some* redundant behavior in how it always looks for the same arguments to unpack, we may be able to handle this by having more optional arguments on the db-side of things.
+Right now, doesn't work too well with passing arguments around as **kwargs, *args and whatnot. Thought I had something good going and then went away from it to go for something simpler.
+It uses a "JSON unpacker function", which may seem redundant or stupid, but I think it is the right decision, since all problems with missing or extra args or kwargs, will come as errors from that funciton, rather than somewhere else. Should make testing easier?
+Will really have to talk to Nicki about this. Decided to schedule next meeting soon.
+Christian might also have some ideas. He mentioned typed dicts, dataclasses, and his preference for the former. I lean more towards dataclasses now, tbh.
+
+UV environment started acting up (couldn't find click installation)
+Did all kinds of shit to try to fix it
+Was only fixed by moving .venv out into its original location (fine you win, you petulant computer-child)
+
+Almost pushed secrets to Github (twice) (shitty .gitignore after moving stuff around)
+Github didn't wanna do it, something something "GITHUB PUSH PROTECTION"
+No idea I'd enabled that. Made an issue to find out when/how it got enabled and how to configure it.
+In same vein: Also made issue to start using pre-commit. Probably should have from beginning, tbh.
+
+Next time, will work on cleaning, writing unittests and integration tests. 
+Then will work on what to show Nicki for next meeting, as well as what questions we may have.
+Then will work on more unittesting and integration testing for backend module.
+Merge drive branch into main and such...
+
+All code works. Have made it a point to have each commit work code-wise. 
+Christian mentioned something something makes regression to another branch automatic-ish testing possible and good. Ask him about it
+
+Still have 21 weeks and we have a solid framework
+Nice. Good job
+We're on this
