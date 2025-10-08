@@ -3,7 +3,16 @@ use rocket::{fairing::AdHoc, figment::Figment, response::status::Custom, http::S
 use rocket::serde::{Serialize, Deserialize, json::Json};
 
 use rocket_db_pools::{Database, Connection};
-use sqlx::Arguments;
+use sqlx::{pool, Arguments};
+
+use std::os::unix::process;
+use std::process::Command;
+use std::path::Path;
+use tokio::time::{interval, Duration};
+use chrono::Utc;
+use rocket::response::Debug;
+use sqlx::Error;
+use std::env;
 
 // TODO: Consider if it makes sense to use a static migrator to avoid re-parsing the migrations each time
 // static MIGRATOR: Migrator = sqlx::migrate!("backend/migrations");
@@ -15,7 +24,7 @@ use sqlx::Arguments;
 #[derive(Database)]
 #[database("postgres_db")]
 // #[database("postgres_tes")]
-pub struct Db(sqlx::PgPool);
+pub struct Db(pub sqlx::PgPool);
 
 type Result<T, E = rocket::response::Debug<sqlx::Error>> = std::result::Result<T, E>;
 
@@ -274,6 +283,15 @@ async fn destroy_transactions(mut db: Connection<Db>) -> Result<()> {
 }
 
 async fn run_migrations(rocket: Rocket<Build>) -> fairing::Result {
+    let should_migrate = env::var("RUN_MIGRATIONS")
+        .map(|v| v == "true")
+        .unwrap_or(false);
+
+    if !should_migrate {
+        eprintln!("🔧 Skipping migrations due to config");
+        return Ok(rocket);
+    }
+    
     match Db::fetch(&rocket) {
         Some(db) => match sqlx::migrate!("src/migrations").run(&**db).await {
             Ok(_) => Ok(rocket),
@@ -285,6 +303,56 @@ async fn run_migrations(rocket: Rocket<Build>) -> fairing::Result {
         None => Err(rocket),
     }
 }
+
+
+
+// TODO: Find out if it is important we should the regular Result<()> error
+async fn process_transaction(tx: Transaction) -> () {
+    let python_path = Path::new("../.venv/bin/python");
+    
+    let script_path = Path::new("../py_modules/orchestrator.py");
+
+    // TODO: Remove expect here - Should have proper error handling
+    let transaction_string = serde_json::to_string(&tx).expect("Failed to serialize to json!");
+
+    let output = Command::new(python_path)
+        .arg(script_path)
+        .arg("--transaction")
+        .arg(transaction_string)
+        .output();
+
+    match output {
+        Ok(result) => {
+            if result.status.success() {
+                println!("Python script output: {}", String::from_utf8_lossy(&result.stdout));
+            } else {
+                eprintln!("Python script failed: {}", String::from_utf8_lossy(&result.stderr));
+            }
+        }
+        Err(e) => {
+            eprintln!("Failed to run Python script: {:?}", e);
+        }
+    }
+}
+
+pub async fn transaction_scheduler(pool: sqlx::PgPool)  -> Result<()> {
+    let mut ticker = interval(Duration::from_secs(5));
+    loop {
+        ticker.tick().await;
+        let now = Utc::now().timestamp_millis();
+
+        // TODO: Move all transactions that are affected to another table - completed transactions or something.
+        let transactions: Vec<Transaction> = sqlx::query_as!(Transaction, "SELECT * FROM transactions WHERE scheduled_time <= $1", now)
+            .fetch_all(&pool)
+            .await?;
+
+        for tx in transactions {
+            process_transaction(tx).await;
+        }
+    }
+}
+
+
 
 // TODO: Find out if there is a way to return rocket::AdHoc so we can Rocket::build() later?
 pub fn rocket_from_config(figment: Figment) -> Rocket<Build> {
