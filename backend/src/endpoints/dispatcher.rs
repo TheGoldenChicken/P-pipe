@@ -352,11 +352,19 @@ pub async fn transaction_scheduler(pool: sqlx::PgPool)  -> Result<()> {
     }
 }
 
-
+fn scheduler_fairing() -> AdHoc {
+    AdHoc::on_ignite("Transaction Scheduler", |rocket| async {
+        // We don't use Db<PgPool> here, since connection is only used inside of a request guard
+        let db = rocket.state::<Db>().expect("Db not initialized");
+        let pool = db.0.clone();
+        tokio::spawn(transaction_scheduler(pool.clone()));
+        rocket
+    })
+}
 
 // TODO: Find out if there is a way to return rocket::AdHoc so we can Rocket::build() later?
 pub fn rocket_from_config(figment: Figment) -> Rocket<Build> {
-    rocket::custom(figment)
+    let rocket_build = rocket::custom(figment)
         .attach(Db::init())
         .attach(AdHoc::try_on_ignite("SQLx Migrations", run_migrations))
         .mount("/", routes![
@@ -367,7 +375,22 @@ pub fn rocket_from_config(figment: Figment) -> Rocket<Build> {
             get_transactions,
             delete_transaction,
             destroy_transactions
-        ])
+        ]);
+
+    let attach_scheduler = env::var("ATTACH_SCHEDULER")
+        .map(|v| v == "true")
+        .unwrap_or(false);
+
+    if attach_scheduler {
+        rocket_build.attach(scheduler_fairing())
+    }
+
+    else {
+        eprintln!("ATTACH_SCHEDULER either false or not set, no scheduler fairing attached");
+        rocket_build
+    }
+
+
 }
 
 
