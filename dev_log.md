@@ -278,3 +278,79 @@ Christian mentioned something something makes regression to another branch autom
 Still have 21 weeks and we have a solid framework
 Nice. Good job
 We're on this
+
+# 07-10-2025
+
+Checked out [rclone](https://rclone.org/). SInce it promises to trivialize all work we otherwise would do on the dispatcher...
+Had some difficulty after setting up the first remote. Apparently you should set scope only to `drive`, otherwise, it'll push files to a location you cannot see as a user.
+Also, it appears you cannot push files to the root folder of your drive (probably because the file already exists there, omg)
+(Yeap, because there was already a file called iris.csv there, rclone doesn't wanna overwrite in this case...)
+
+Thought a bit about it, rclone provides pretty much provider-agnostic commands to **upload** the data, albeit with tiny differences:
+...Mega does not allow file creation
+...S3 does not allow bucket creation, supports versioning, etc.
+...Drive has the whole AppFile issue going for it.
+
+That means, if I choose to go ahead with Rclone, I'll still need to do **some** implementation work, having like specific ways to transfer a specific transaction to a specific provider. But I can pretty much do away with all smaller functinons like drive_folder_creation, drive_data_dispatch, etc.
+
+Decided to throw that off for now, and work on Rust background polling...
+Regarding that, I looked into postgres has like a LISTEN/NOTIFY system, which can be combined with `pg_cron` - essentially a cronjob package for a postgres database
+... but this is a lot of work, and I don't wanna run into an sqlx::test issue again. So I'm gonna go with:
+- Spawn an async thread in Rust
+- Ping the database each $n$ seconds to see if any jobs are past their due date
+- If so, run the job.
+
+And that is it.
+
+Spent some time working on the task scheduler for Rust
+Ran into slight problems when I tried to run an sqlx reset command...
+We've changed the migration script, but sqlx remembers what it ran, so it didn't wanna do it, and we have to run a `sqlx database reset` to get it to stop acting up
+And that destroyed everything, and we don't care really.
+
+
+# 9-10-2025
+
+Made small changes to have attaching the scheduler be part of the .env file configuration
+Should make testing easier
+
+# 10-10-2025
+
+Cleaned up dispatcher.rs and main.rs scripts.
+Added some proper error handling to process transaction part of dispatcher
+Added some more error handling to create_transactions_from_challenge in the case of missing challenge_id 
+
+Most importantly, had a brainstorm on how we can change table structures to make more sense, especially given that we should have multiple different locations to dispatch data to. Found out a few things:
+- We don't have any way to configure *where* a challenge has to dispatch data to right now
+- We don't have any way of differentiating actual data upload transactions from just book-keeping or configuration transactions (like if we have to create folders, update permissions, etc.)
+- We don't have any way to write who should have permissions to a given location (mail for drive, aws account for s3, so on)
+
+Ended up deciding that we add a kind of `dispatch_to` column to challenges, which is a list of strings `TEXT[]`. This can then hold all the specific places we can dispatch to. EDIT: Should be a custom enum (places we can dispatch to, instead). Initial implementation is then just having the create_transactions_from_challenge split the data randomly bewteen the two places... probably the best.
+
+Following that, the place it dispatches to is just challenge_id_challenge_name (challenge name being an auto-generated UUID if it is None)
+a drive folder called challenge_id_challenge_name/ if drive, a folder in a bucket called challenge_id_challenge_name/challenge_id_challenge_name if s3.
+
+The data_intended_location for transactions then simply needs to add /release_name to each release (can be as simple as adding transaction_id as the release_name), and either rclone_drive_remote_name or rclone_s3_remote_name in front for either drive or s3
+
+Added access_bindings, a jsonb column to all tables. For challenges, it should be information for who should have access to all dispatches_to locations, like:
+
+  '[
+    { "service": "google_drive", "identity": "alice@example.com", "identity_type": "email" },
+    { "service": "aws_s3", "identity": "123456789012", "identity_type": "account_id" }
+  ]'
+
+For tranasctions, it is something that'll update the permissions of the folder in question if necessary. This permissions update I'm thinking we do whenever either both or one of rows_to_push or source_data_location is NULL. That way we can differentiate between "I wanna upload some data"-transactions, and "I just wanna update permissions"-transactions
+
+Might need to add a create_folder kind of subtransaction? Don't know how it works on s3...
+
+Have postponed users manually entering where and when they want the specific transactions to a later time. Will probably be done by having like an additional jsonb added to the challenges table, and then unpacking this when we create the transactions.
+
+Obviously, all of this also requires that we change some Rust code, and some Python code, so that'll be for next time, probably wednesday 15/10/2025. After this, we should be able to:
+
+- Add challenges, which automatically adds transactions
+- Automatically run those transactions in Python in the background, which dispatchse to two locations
+
+And this is essentially our MVP. So I *think* that this should be decided as kind of our 0.1.0 version, and from there we can then create automatic testing, pre-commit, and all teh other devops stuff that we want (which at this point should be in our backlog) to ensure we have a place to reference and roll back to in case shit hits the fan. This point about deciding on what the 0.1.0 release will contain, is a point in our issues, however, something we'll decide with Nicki also, so I guess we'll hear his side of it also...
+
+Nice. We're getting there, after this, I think we're much more golden than we otherwise would be.
+
+**This is week 7/25, we have 19 weeks, 6 days left. We are $28\%$ through with the project time-wise. Is that good? We should ask Nicki...**
