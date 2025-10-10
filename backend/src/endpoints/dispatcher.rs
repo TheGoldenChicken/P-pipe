@@ -3,16 +3,18 @@ use rocket::{fairing::AdHoc, figment::Figment, response::status::Custom, http::S
 use rocket::serde::{Serialize, Deserialize, json::Json};
 
 use rocket_db_pools::{Database, Connection};
-use sqlx::{pool, Arguments};
+use sqlx::{Arguments};
 
-use std::os::unix::process;
 use std::process::Command;
 use std::path::Path;
 use tokio::time::{interval, Duration};
 use chrono::Utc;
-use rocket::response::Debug;
-use sqlx::Error;
 use std::env;
+
+// TODO: Add some sort of checking to ensure if transactions.rows_to_push it is actually a 'range'? - Not enforced in any other way, I mean...
+// ... can be done through making a custom constructor transactions::new() and having the function there...
+// ... not good, since most creating those structs logic is done through implicit means
+// ... transactions::new would never be called explicitly
 
 // TODO: Consider if it makes sense to use a static migrator to avoid re-parsing the migrations each time
 // static MIGRATOR: Migrator = sqlx::migrate!("backend/migrations");
@@ -20,10 +22,23 @@ use std::env;
 // TODO: Consider if we should do away with the whole Custom<String> Type and instead just use tokio_postgres::Error?
 // TODO: Consider if we should look into a way of having custom return messages... what if we want to show both challenges affected, AND transactions?
 
+// TODO: Add checks to add_challenge to see if release options makes sense:
+// - do release proportions sum to 1?
+// - Are any release proportions above 1?
+// - Is time of first release already passed?
+// - Is time between releases a fair number?
+
+// TODO: Consider if add_challenge should even return all challenges when added, might be kinda bad...
+
+// TODO: Consider better ways of making add_transactions_into_db. It is VERY fragile right now...
+// ... and doesn't respond at all well to changes in the db schema...
+
+// TODO: Make unit-test testing transactions_from_challenge for correct behavior!
+
+
 // TODO: Consider if it even makes sense to have this here, we use it in more places, but it is also so little code, sooooooo?
 #[derive(Database)]
 #[database("postgres_db")]
-// #[database("postgres_tes")]
 pub struct Db(pub sqlx::PgPool);
 
 type Result<T, E = rocket::response::Debug<sqlx::Error>> = std::result::Result<T, E>;
@@ -48,15 +63,19 @@ pub struct Challenge {
 #[derive(Serialize, Deserialize, Clone, Debug, sqlx::FromRow)]
 
 pub struct Transaction {
+    // "Bookkeeping fields"
     pub id: Option<i32>,
     pub challenge_id: i32,
     pub created_at: Option<i64>,
+
+    // Transaction info fields
     pub scheduled_time: i64,
     pub source_data_location: String,
     pub data_intended_location: String,
     pub rows_to_push: Vec<i32>,
 }
-// Custom partialEq function so we can test if transactions from the db (with id and created_at) match those we expect to create (from transactions_from_challenge)
+
+// Custom PartialEq function so we can test if transactions from the db (with id and created_at) match those we expect to create (from transactions_from_challenge)
 impl PartialEq for Transaction {
     fn eq(&self, other: &Self) -> bool {
         self.challenge_id == other.challenge_id &&
@@ -68,20 +87,15 @@ impl PartialEq for Transaction {
 }
 
 
-
-
 #[derive(Serialize, Deserialize, Clone, Debug, sqlx::FromRow)]
 struct CompletedTransaction {
-    // "Bookkeeping fields"
     id: Option<i32>,
     challenge_id: i32,
     created_at: Option<i64>,
 
-    // Transaction info fields
     scheduled_time: i64,
     source_data_location: String,
     data_intended_location: String,
-    // TODO: Add some sort of checking to ensure it is actually a 'range'? - Not enforced in any other way, I mean...
     rows_to_push: Vec<i32>,
     
     // Status fields - for completed transactions
@@ -91,19 +105,12 @@ struct CompletedTransaction {
     stderr: Option<String>
 }
 
-// TODO: Consider if this function should even return all challenges when added, might be kinda bad...
 #[post("/api/challenges", data = "<challenge>")]
 async fn add_challenge(
     mut db: Connection<Db>,
     challenge: Json<Challenge> 
 ) -> Result<Json<Vec<Challenge>>, Custom<String>>  {
     
-    // TODO: Add check here to see if release options makes sense:
-    // - do release proportions sum to 1?
-    // - Are any release proportions above 1?
-    // - Is time of first release already passed?
-    // - Is time between releases a fair number?
-
     // TODO; Check if we can do this with execute_query?
     let challenge = sqlx::query_as!(
         Challenge,
@@ -126,7 +133,7 @@ async fn add_challenge(
     .await.map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
     
     // Generate transactions and add them to the DB
-    let generated_transactions = transactions_from_challenge(challenge);
+    let generated_transactions = transactions_from_challenge(challenge)?;
     add_transactions_into_db(&mut db, &generated_transactions).await?;
 
     get_challenges(db).await                            
@@ -134,15 +141,14 @@ async fn add_challenge(
 
 
 async fn add_transactions_into_db(
-    // db: &sqlx::PgPool,
     db: &mut Connection<Db>,
     transactions: &[Transaction],
 ) -> Result<u64, Custom<String>> {
+    
     if transactions.is_empty() {
         return Ok(0);
     }
 
-    // Build VALUES clause and parameter list
     let mut query = String::from("INSERT INTO transactions (challenge_id, scheduled_time, source_data_location, data_intended_location, rows_to_push) VALUES ");
     let mut args = sqlx::postgres::PgArguments::default();
 
@@ -179,8 +185,7 @@ async fn add_transactions_into_db(
 }
 
 
-// TODO: Make unit-test testing this for correct behavior!
-pub fn transactions_from_challenge(challenge: Challenge) -> Vec<Transaction> {
+pub fn transactions_from_challenge(challenge: Challenge) -> Result<Vec<Transaction>, Custom<String>> {
     let mut transactions = Vec::new();
 
     let mut running_proportion: f64 = 0.;
@@ -193,16 +198,19 @@ pub fn transactions_from_challenge(challenge: Challenge) -> Vec<Transaction> {
         // let rows_to_push_count = (release_proportion * challenge.init_dataset_rows as f64).round() as i32;
         // let rows_to_push = (0..rows_to_push_count).collect::<Vec<i32>>();   
 
-        // TODO: Add check or fix here to ensure all rows are included - or at least, the total number of rows to push does not exceed the number of rows in dataset
         let rows_from = (running_proportion * challenge.init_dataset_rows as f64).round() as i32;
         let rows_to = ((running_proportion + release_proportion) * challenge.init_dataset_rows as f64).round() as i32;
         let rows_to_push = vec![rows_from, rows_to];
         running_proportion += release_proportion;
         
+        // Returns error here if challenge id does not exist.
+        let challenge_id = challenge.id.ok_or_else(|| {
+            Custom(Status::BadRequest, "Missing challenge ID".to_string())
+        })?;
 
         let transaction = Transaction {
             id: None,
-            challenge_id: challenge.id.unwrap_or_default(), // TODO: Here should fail or return error if none is present, or_default simply gets 0, which is an error...
+            challenge_id: challenge_id,
             created_at: None,
             scheduled_time,
             source_data_location: challenge.init_dataset_location.clone(),
@@ -212,7 +220,7 @@ pub fn transactions_from_challenge(challenge: Challenge) -> Vec<Transaction> {
         transactions.push(transaction);
     }
 
-    transactions
+    Ok(transactions)
 }
 
 
@@ -242,6 +250,13 @@ async fn delete_challenge(mut db: Connection<Db>, id: i32) -> Result<Status, Cus
     Ok(Status::NoContent)
 }
 
+#[delete("/api/challenges")]
+async fn destroy_challenges(mut db: Connection<Db>) -> Result<()> {
+    sqlx::query!("DELETE FROM challenges").execute(&mut **db).await?;
+
+    Ok(())
+}
+
 #[get("/api/transactions")]
 async fn get_transactions(mut db: Connection<Db>) -> Result<Json<Vec<Transaction>>, Custom<String>> {
     let transactions = sqlx::query_as!(
@@ -266,13 +281,6 @@ async fn delete_transaction(mut db: Connection<Db>, id: i32) -> Result<Status, C
     .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
 
     Ok(Status::NoContent)
-}
-
-#[delete("/api/challenges")]
-async fn destroy_challenges(mut db: Connection<Db>) -> Result<()> {
-    sqlx::query!("DELETE FROM challenges").execute(&mut **db).await?;
-
-    Ok(())
 }
 
 #[delete("/api/transactions")]
@@ -304,16 +312,15 @@ async fn run_migrations(rocket: Rocket<Build>) -> fairing::Result {
     }
 }
 
-
-
-// TODO: Find out if it is important we should the regular Result<()> error
-async fn process_transaction(tx: Transaction) -> () {
+async fn process_transaction(tx: Transaction) -> Result<(), Custom<String>> {
+    // TODO: Move python_path and script_path to env variables
     let python_path = Path::new("../.venv/bin/python");
-    
     let script_path = Path::new("../py_modules/orchestrator.py");
 
+
     // TODO: Remove expect here - Should have proper error handling
-    let transaction_string = serde_json::to_string(&tx).expect("Failed to serialize to json!");
+    let transaction_string = serde_json::to_string(&tx)
+    .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
 
     let output = Command::new(python_path)
         .arg(script_path)
@@ -324,30 +331,31 @@ async fn process_transaction(tx: Transaction) -> () {
     match output {
         Ok(result) => {
             if result.status.success() {
-                println!("Python script output: {}", String::from_utf8_lossy(&result.stdout));
+                // TODO: Find a graceful way to return successful Python output
+                Ok(())
             } else {
-                eprintln!("Python script failed: {}", String::from_utf8_lossy(&result.stderr));
+                Err(Custom(Status::InternalServerError, format!("Python script failed with error {}", String::from_utf8_lossy(&result.stderr))))
             }
         }
         Err(e) => {
-            eprintln!("Failed to run Python script: {:?}", e);
+            Err(Custom(Status::InternalServerError, format!("Failed calling Python script with error {:?}", e)))
         }
     }
 }
 
-pub async fn transaction_scheduler(pool: sqlx::PgPool)  -> Result<()> {
+pub async fn transaction_scheduler(pool: sqlx::PgPool) -> Result<(), Custom<String>> {
     let mut ticker = interval(Duration::from_secs(5));
     loop {
         ticker.tick().await;
         let now = Utc::now().timestamp_millis();
 
         // TODO: Move all transactions that are affected to another table - completed transactions or something.
-        let transactions: Vec<Transaction> = sqlx::query_as!(Transaction, "SELECT * FROM transactions WHERE scheduled_time <= $1", now)
+        let transactions = sqlx::query_as!(Transaction, "SELECT * FROM transactions WHERE scheduled_time <= $1", now)
             .fetch_all(&pool)
-            .await?;
+            .await.map_err(|e| Custom(Status::InternalServerError, format!("Scheduler to grab transactions from database, {}", e)))?;
 
         for tx in transactions {
-            process_transaction(tx).await;
+            process_transaction(tx).await?;
         }
     }
 }
@@ -362,7 +370,6 @@ fn scheduler_fairing() -> AdHoc {
     })
 }
 
-// TODO: Find out if there is a way to return rocket::AdHoc so we can Rocket::build() later?
 pub fn rocket_from_config(figment: Figment) -> Rocket<Build> {
     let rocket_build = rocket::custom(figment)
         .attach(Db::init())
@@ -416,8 +423,8 @@ mod tests {
             time_between_releases: 60,
         };
 
-        let transactions = transactions_from_challenge(challenge.clone());
-
+        let transactions = transactions_from_challenge(challenge.clone()).expect("Could not generate transactions from challenge!");
+        
         assert_eq!(transactions.len(), 3, "Expected 3 transactions");
 
         let expected = vec![
@@ -477,7 +484,7 @@ mod tests {
                 time_between_releases: 1,
             };
 
-            let transactions = transactions_from_challenge(challenge);
+            let transactions = transactions_from_challenge(challenge).expect("Could not generate transactions from challenge");
 
             let total_rows: i32 = transactions.iter()
                 .map(|t| t.rows_to_push[1] - t.rows_to_push[0])
