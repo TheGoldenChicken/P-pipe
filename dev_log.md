@@ -354,3 +354,91 @@ And this is essentially our MVP. So I *think* that this should be decided as kin
 Nice. We're getting there, after this, I think we're much more golden than we otherwise would be.
 
 **This is week 7/25, we have 19 weeks, 6 days left. We are $28\%$ through with the project time-wise. Is that good? We should ask Nicki...**
+
+
+# 15-10-2025
+
+The dev log from *10-10-2025* saved me. Couldn't find a template for the access bindings, so I did..., nice.
+
+Ok, we ended up fighting with a lot of annoying things this time...
+Started out nicely by splitting up and redoing the migraiton scripts... easy.
+Then went on to reset the postgres server with `sqlx database reset`, works, easy no problemo.
+
+THEN, we go about rewriting the backend to properly accept the new enums we have made.
+Fuck
+Shit
+Balls
+
+Start out by adding access_bindings (what type should that even be?) in Rust. Decide on an Enum of structs, nice.
+Challenge then has a `Vec<access_bindings>`, good shit.
+After this, create enum for dispatches_to. Good shit, no worries. We've done this before in postgres_tokio, how bad can it be?
+Challenges then has `Vec<DispatchTarget>` from the postgres dispatches_to[] type.
+We have to play around a bit with the traits of this, but overall it works out. 
+
+Then, we run into the issue: error: unsupported type dispatches_to of column #8 ("DispatchTarget")
+
+We find out quickly, this stems from query_as! and the ludicrously hard restrictions it places on the compile-time checked types. Moreover, it doesn't properly use the From<T> trait when using query_as! or query! this appears from the following threads: [thread one](https://github.com/launchbadge/sqlx/issues/1004) (this was where the solution was found), and [thread two](https://github.com/launchbadge/sqlx/issues/514) (this is where the more general nature of the error is described).
+
+I tried a bunch to get it to work, but constantly was hamstrung by a bunch of small issues: Forgetting to write dispatches to as `Vec<DispatchTarget>`, error, forget to include access_bindings correctly, error, etc. 
+
+End up trying to just have the postgres type be text and have the rust type be an enum. Copilot came with two faulty solutions here:
+
+```rust
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type)]
+#[sqlx(transparent)] // Treat as a wrapper over TEXT
+pub enum DispatchTarget {
+    #[serde(rename = "s3")]
+    S3,
+    #[serde(rename = "drive")]
+    Drive,
+}
+```
+
+```rust
+#[derive(sqlx::Type, Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[sqlx(type_name = "text")] // optional, for clarity
+#[serde(rename_all = "lowercase")]
+pub enum DispatchTarget {
+    S3,
+    Drive,
+}
+```
+
+The former didn't work because you cannot use sqlx(transparent) in this way (it is meant for Rust structs -> Postgres TEXT as far as I know), the latter didn't work because who the fuck knows? Something about not implementing From<()>, it was akin to, but not the exact same as the original issue.
+
+I end up cutting down all other columns, and making a test database with only the `dispatches_to` enum as a type, and then working on a dummy insert function in Rust, so it ONLY inserts to that one column, but still as a dispatches to column. Here, I can then try the solutions from the [github thread](https://github.com/launchbadge/sqlx/issues/1004), the ones that solve it are essentially incorporating this:
+
+INSERT statements
+```rust
+sqlx::query_as!(
+        TestChallenge,
+        r#"
+        INSERT INTO test_table
+        (dispatches_to)
+        VALUES ($1)
+        "#,
+        challenge.dispatches_to.clone() as _,
+    )
+```
+
+SELECT statements
+```rust
+    sqlx::query_as!(
+        TestChallenge,
+        r#"
+        SELECT dispatches_to as "dispatches_to: DispatchTarget" FROM test_table
+        "#
+    )
+```
+
+So, the `as _` and  `as "dispatches_to: DispatchTarget"` seem to be the fix.
+
+I have already tested without either of these, and they appear to be the one line that make or break this whole machinery. 
+
+If I had to guess, I think the error is correctly something about `query_as!` and `query!` not correctly making use of or doing stuff with the `From<T>` trait that sqlx has. This would otherwise be responsible for turning something from one Rust type to a corresponding Postgres type (I think). I don't know how it would look runtime-checked instead, something about having to use `.bind()` instead, but I don't even know if it would throw any error to begin with, since `query` the non-macro version might use `From<T>` correctly and whatnot. 
+
+Then again, almost every issue caught with the macro at compile-time, is probably an issue we don't have to find at runtime instead, which is way slower to search through. So I guess in the end it's fine. At some point though, we may have to rip off the band-aid and stop using `query!` macros... there may be more flexibility in runtime checking, and I don't know how many issues it will present with proper testing. The main concern is the time taken to make the change, the sunk cost already, and the potentially higher development time, really I don't think the runtime issues are anything to be concerned with, application isn't big enough to run into esoteric as such issues.
+
+Next time, we'll stay on that testing path, and try to expand it to `Vec<DispatchTarget>` in Rust to `dispatches_to[]` in Postgres. Then we'll see if it works. After that, we can make a similar development test for access_bindings and see if that works, and before you know it we'll have both....
+
+Or we'll be dead, who knows!
