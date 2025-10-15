@@ -442,3 +442,26 @@ Then again, almost every issue caught with the macro at compile-time, is probabl
 Next time, we'll stay on that testing path, and try to expand it to `Vec<DispatchTarget>` in Rust to `dispatches_to[]` in Postgres. Then we'll see if it works. After that, we can make a similar development test for access_bindings and see if that works, and before you know it we'll have both....
 
 Or we'll be dead, who knows!
+
+UPDATE: Made it work. Pretty simple, with `SELECT` it was all a matter of
+
+```rust
+TestChallenge,
+r#"
+SELECT dispatches_to as "dispatches_to: Vec<DispatchTarget>" FROM test_table
+"#
+```
+
+For insert, it gave a more esoteric issue about not implementing `PgHasArrayType`, that might be a missing feature on the side of sqlx... The fix was pretty simple enough, and found from [this guy panicking on reddit](https://www.reddit.com/r/rust/comments/u0mewy/help_wanted_insert_vecenum_with_sqlx_in_a_postgres/), and then [linking to this comment from the same issue from before](https://github.com/launchbadge/sqlx/issues/1004#issuecomment-1019438437). It just requires you implement this trait for the `DispatchTarget`
+
+```rust
+impl PgHasArrayType for DispatchTarget {
+    fn array_type_info() -> PgTypeInfo {
+        PgTypeInfo::with_name("dispatch_target[]")
+    }
+}
+```
+
+Tested to see if `[]` are necessary (github comment says otherwise), yes they are.
+
+Really, the fact that we had to implement this pretty stupid and useless trait with only type info, tells me more that this is just something that comes from `query!` being overzealous in what'll fail on the side of Postgres. It is also supported by [some guys talking about a const_panic value](https://github.com/launchbadge/sqlx/issues/514#issuecomment-657723036), indicating it is just an issue of panicking when it shouldn't...
