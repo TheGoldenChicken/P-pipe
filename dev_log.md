@@ -465,3 +465,27 @@ impl PgHasArrayType for DispatchTarget {
 Tested to see if `[]` are necessary (github comment says otherwise), yes they are.
 
 Really, the fact that we had to implement this pretty stupid and useless trait with only type info, tells me more that this is just something that comes from `query!` being overzealous in what'll fail on the side of Postgres. It is also supported by [some guys talking about a const_panic value](https://github.com/launchbadge/sqlx/issues/514#issuecomment-657723036), indicating it is just an issue of panicking when it shouldn't...
+
+
+# 16-10-2025
+
+Found the real error that was holding me up so long yesterday. After I tried `"INSERT" challenge.dispatches_to as _`, initially, it still didn't work. It was only when I made the whole testing function that it did. 
+Now, when I tried to expand that to the whole `Challenge` struct, it gave me an error again... but there should be no differences between them right? WRONG. The initial function had this `RETURNING *`... You cannot `SELECT *`, when you need to select `dispatches_to` like: `dispatches_to as "dispatches_to: Vec<DispatchTarget>"`.
+
+THAT is the heart of the issues yesterday. Simply doing away with `*`, and explicitly adding column names to get in `RETURNING`, fixed the issue. Nice.
+
+After fixing that, had a few headaches trying to get `access_bindings` to play nicely. Ended up working *fairly* easily, by simply using this type for both Challenges, Transactions and CompletedTransactions: `Option<DbJson<Vec<AccessBinding>>>`, which corresponds to `access_bindings jsonB` in Postgres. From what I have tested, it appears to serialize well one way to Postgres, but I need to be sure that it serializes the other way FROM postgres. Though usually, if it passes the compiler, sqlx doesn't let me down. 
+
+There is a slight issue, and that is the `DbJson` type, technically `sqlx::types::Json` (shares name with `serde::Json`, hence the alias). In my API, I really wanna treat it as just `Vec<AccessBinding>`, but can't as long as it is wrapped in `JsonDb`. We can easily unwrap it with something like `c.access_bindings.map(|json| json.0)`, but this might become cluttered and tedious. Copilot suggested making a wrapper function, so having like an API-side challenges and a postgres-side challenges, and have a `From` trait to change between the two. Needless obfuscation, abstraction, whatever. Briefly considered it, frfr, but then remembered that most Challenges API-side, also need to go to Postgres side at some point, or vice versa, so no point in changing to types that are incompatible with each other. Will probably just end up using the aforementioned line.
+
+Also had some slight hiccups on having removed `NOT NULL` fields in Postgres, which automatically corresponds to having to have an `Option<T>` field in Rust. Fucked with me a bit, not much.
+
+By the end, had all endpoints working 'as they should', that means, after a very surface-level Postman test. I don't know if all types are the right types and whatnot, need to test that explicitly next time. Speaking of which, all tests are broken, need to rewrite them, and write new ones, yay!
+
+Also, `transaction_scheduler`, `transactions_from_challenge`, and those things, while they *compile* (because I made some compatiblity things), they don't do what they're suposed to. So I can't close the issue of rewriting the stuff in Rust... not yet anyways.  
+
+Also need to add functionality to move attemped transactions to `completed_transactions`, this needs to be done as part of the same issue, I'd say. At this point, it's just the final Rust touch-ups before the 0.1.0 version.
+
+Might wanna look into new way of having priorities in Github, right now, I can kinda get it to work (all having same priority, I can just reorder them), but it doesn't show a nice story of what was high- and low-priority at different times. 
+
+This has been quite fast and informative. Also ended up using `transaction_status` as an enum, since what I learned from `dispatches_to`, challengees-side, so that's nice!
