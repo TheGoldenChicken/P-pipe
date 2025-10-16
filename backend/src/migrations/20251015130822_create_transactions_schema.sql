@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS completed_transactions (
 
     -- Status fields
     attempted_at BIGINT,
+    -- transaction_status transaction_status_enum NOT NULL,
     transaction_status transaction_status_enum NOT NULL,
     stdout TEXT,
     stderr TEXT

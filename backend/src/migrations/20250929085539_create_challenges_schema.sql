@@ -19,3 +19,8 @@ CREATE TABLE IF NOT EXISTS challenges (
     access_bindings jsonB
 );    
 
+CREATE TABLE IF NOT EXISTS test_table (
+    id SERIAL PRIMARY KEY,
+    dispatches_to dispatch_target[] NOT NULL
+);    
+

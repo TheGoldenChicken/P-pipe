@@ -3,14 +3,14 @@ use rocket::{fairing::AdHoc, figment::Figment, response::status::Custom, http::S
 use rocket::serde::{Serialize, Deserialize, json::Json};
 
 use rocket_db_pools::{Database, Connection};
-use sqlx::{Arguments, Decode, Type};
+use sqlx::Arguments; // Even though arguments appears unused, it is used in the background (macros perhaps?)
 use sqlx::types::Json as DbJson;
 
 use std::process::Command;
 use std::path::Path;
+use std::env;
 use tokio::time::{interval, Duration};
 use chrono::Utc;
-use std::env;
 
 // TODO: Add some sort of checking to ensure if transactions.rows_to_push it is actually a 'range'? - Not enforced in any other way, I mean...
 // ... can be done through making a custom constructor transactions::new() and having the function there...
@@ -38,6 +38,7 @@ use std::env;
 
 // TODO: Possibly make a wrapper struct around Challenges which is PostgresChallenge. This is to make AccessBindings be 
 // For now, we can make due with writing this, whenever we need to use a Vec<AccessBinding>  access_bindings: c.access_bindings.map(|json| json.0)
+// *Might* not make sense, tho. Since we have to pass AccessBindings back and forth to and from postgres, and at each point, it must be wrapped in sqlx::types::Json<>
 
 // TODO: Consider if it even makes sense to have this here, we use it in more places, but it is also so little code, sooooooo?
 #[derive(Database)]
@@ -47,7 +48,7 @@ pub struct Db(pub sqlx::PgPool);
 type Result<T, E = rocket::response::Debug<sqlx::Error>> = std::result::Result<T, E>;
 
 #[derive(sqlx::Type, Serialize, Deserialize, Debug, Clone, PartialEq)]
-#[sqlx(type_name = "dispatch_target", rename_all = "lowercase")] // TODO: CHANGE TO SNAKE CASE, NOT LOWERCASE
+#[sqlx(type_name = "dispatch_target", rename_all = "snake_case")] // TODO: CHANGE TO SNAKE CASE, NOT LOWERCASE
 pub enum DispatchTarget {
     S3,
     Drive,
@@ -61,6 +62,7 @@ impl PgHasArrayType for DispatchTarget {
         PgTypeInfo::with_name("dispatch_target[]")
     }
 }
+
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(tag = "type")] // This tells serde to use the "type" field to determine the variant
@@ -80,6 +82,14 @@ pub struct DriveBinding {
     pub identity: String,
     pub folder_id: Option<String>,
     pub user_permissions: String, // TODO: Change this to be an enum of all roles in Drive
+}
+
+#[derive(sqlx::Type, Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[sqlx(type_name = "transaction_status_enum", rename_all = "snake_case")]
+pub enum TransactionStatus {
+    Success,
+    SuccessWithStdout,
+    Failed,
 }
 
 
@@ -113,9 +123,11 @@ pub struct Transaction {
 
     // Transaction info fields
     pub scheduled_time: i64,
-    pub source_data_location: String,
+    pub source_data_location: Option<String>,
     pub data_intended_location: String,
-    pub rows_to_push: Vec<i32>,
+    pub rows_to_push: Option<Vec<i32>>,
+
+    pub access_bindings: Option<DbJson<Vec<AccessBinding>>>,
 }
 
 // Custom PartialEq function so we can test if transactions from the db (with id and created_at) match those we expect to create (from transactions_from_challenge)
@@ -125,7 +137,8 @@ impl PartialEq for Transaction {
         self.scheduled_time == other.scheduled_time &&
         self.source_data_location == other.source_data_location &&
         self.data_intended_location == other.data_intended_location &&
-        self.rows_to_push == other.rows_to_push
+        self.rows_to_push == other.rows_to_push &&
+        self.access_bindings == other.access_bindings
     }
 }
 
@@ -139,13 +152,15 @@ struct CompletedTransaction {
     scheduled_time: i64,
     source_data_location: String,
     data_intended_location: String,
-    rows_to_push: Vec<i32>,
+    rows_to_push: Option<Vec<i32>>,
     
     // Status fields - for completed transactions
     attempted_at: Option<i64>,
-    transaction_status: String,
+    transaction_status: TransactionStatus,
     stdout: Option<String>,
-    stderr: Option<String>
+    stderr: Option<String>,
+
+    access_bindings: Option<DbJson<Vec<AccessBinding>>>,
 }
 
 #[post("/api/challenges", data = "<challenge>")]
@@ -196,103 +211,6 @@ async fn add_challenge(
 
     get_challenges(db).await                            
 }
-
-
-// #[post("/api/challenges", data = "<challenge>")]
-// async fn add_challenge(
-//     mut db: Connection<Db>,
-//     challenge: Json<TestChallenge> 
-// ) -> ()  {
-    
-//     let res = sqlx::query_as!(
-//         Challenge,
-//         r#"
-//         INSERT INTO challenges
-//         (challenge_name, init_dataset_location, init_dataset_rows, init_dataset_name,
-//         init_dataset_description, dispatches_to, time_of_first_release, release_proportions, time_between_releases, access_bindings)
-//         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-//         RETURNING
-//             id,
-//             challenge_name,
-//             created_at,
-//             init_dataset_location,
-//             init_dataset_rows,
-//             init_dataset_name,
-//             init_dataset_description,
-//             dispatches_to as "dispatches_to: Vec<DispatchTarget>",
-//             time_of_first_release,
-//             release_proportions,
-//             time_between_releases,
-//             access_bindings as "access_bindings: DbJson<Vec<AccessBinding>>"
-//         "#,
-//         challenge.challenge_name,
-//         challenge.init_dataset_location,
-//         challenge.init_dataset_rows,
-//         challenge.init_dataset_name,
-//         challenge.init_dataset_description,
-//         challenge.dispatches_to as _,
-//         challenge.time_of_first_release,
-//         &challenge.release_proportions,
-//         challenge.time_between_releases,
-//         challenge.access_bindings as _
-//     )
-//     .fetch_one(&mut **db).await.expect("Something went wrong");
-// }
-
-
-
-// #[post("/api/challenges", data = "<challenge>")]
-// async fn add_challenge(
-//     mut db: Connection<Db>,
-//     challenge: Json<TestChallenge> 
-// ) -> ()  {
-    
-//     // TODO; Check if we can do this with execute_query?
-//     let res = sqlx::query_as!(
-//         TestChallenge,
-//         r#"
-//         INSERT INTO test_table
-//         (id, dispatches_to)
-//         VALUES ($1, $2)
-//         "#,
-//         challenge.id,
-//         challenge.dispatches_to.clone() as _,
-//     )
-//     .execute(&mut **db).await.expect("Something went wrong");
-// }
-
-// #[get("/api/challenges")]
-// async fn get_challenges(
-//     mut db: Connection<Db> 
-// ) -> Json<Vec<Challenge>>  {
-    
-//     // TODO: For some reason, we don't need to write Option<DBJson<Vec<AccessBinding>>> - No idea why
-//     let res = sqlx::query_as!(
-//         Challenge,
-//         r#"
-//         SELECT
-//             id,
-//             challenge_name,
-//             created_at,
-//             init_dataset_location,
-//             init_dataset_rows,
-//             init_dataset_name,
-//             init_dataset_description,
-//             dispatches_to as "dispatches_to: Vec<DispatchTarget>",
-//             time_of_first_release,
-//             release_proportions,
-//             time_between_releases,
-//             access_bindings as "access_bindings: DbJson<Vec<AccessBinding>>"
-//         FROM
-//             challenges;
-//         "#
-//     )
-//     .fetch_all(&mut **db).await.expect("Something went wrong");
-//     Json(res)
-// }
-
-
-
 
 
 async fn add_transactions_into_db(
@@ -368,9 +286,10 @@ pub fn transactions_from_challenge(challenge: Challenge) -> Result<Vec<Transacti
             challenge_id: challenge_id,
             created_at: None,
             scheduled_time,
-            source_data_location: challenge.init_dataset_location.clone(),
+            source_data_location: Some(challenge.init_dataset_location.clone()),
             data_intended_location: format!("release_{}", i),
-            rows_to_push,
+            rows_to_push: Some(rows_to_push),
+            access_bindings: challenge.access_bindings.clone()
         };
         transactions.push(transaction);
     }
@@ -409,58 +328,70 @@ async fn get_challenges(mut db: Connection<Db>) -> Result<Json<Vec<Challenge>>, 
 }
 
 
-// #[delete("/api/challenges/<id>")]
-// async fn delete_challenge(mut db: Connection<Db>, id: i32) -> Result<Status, Custom<String>> {
-//     sqlx::query!(
-//         "DELETE FROM challenges WHERE id = $1",
-//         id
-//     )
-//     .execute(&mut **db)
-//     .await
-//     .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
+#[delete("/api/challenges/<id>")]
+async fn delete_challenge(mut db: Connection<Db>, id: i32) -> Result<Status, Custom<String>> {
+    sqlx::query!(
+        "DELETE FROM challenges WHERE id = $1",
+        id
+    )
+    .execute(&mut **db)
+    .await
+    .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
 
-//     Ok(Status::NoContent)
-// }
+    Ok(Status::NoContent)
+}
 
-// #[delete("/api/challenges")]
-// async fn destroy_challenges(mut db: Connection<Db>) -> Result<()> {
-//     sqlx::query!("DELETE FROM challenges").execute(&mut **db).await?;
+#[delete("/api/challenges")]
+async fn destroy_challenges(mut db: Connection<Db>) -> Result<()> {
+    sqlx::query!("DELETE FROM challenges").execute(&mut **db).await?;
 
-//     Ok(())
-// }
+    Ok(())
+}
 
-// #[get("/api/transactions")]
-// async fn get_transactions(mut db: Connection<Db>) -> Result<Json<Vec<Transaction>>, Custom<String>> {
-//     let transactions = sqlx::query_as!(
-//         Transaction,
-//         "SELECT id, challenge_id, created_at, scheduled_time, source_data_location, data_intended_location, rows_to_push FROM transactions"
-//     )
-//     .fetch_all(&mut **db)
-//     .await
-//     .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
+#[get("/api/transactions")]
+async fn get_transactions(mut db: Connection<Db>) -> Result<Json<Vec<Transaction>>, Custom<String>> {
+    let transactions = sqlx::query_as!(
+        Transaction,
+        r#"
+        SELECT
+            id,
+            challenge_id,
+            created_at,
+            scheduled_time,
+            source_data_location,
+            data_intended_location,
+            rows_to_push,
+            access_bindings as "access_bindings: DbJson<Vec<AccessBinding>>"
+        FROM 
+            transactions
+        "#
+    )
+    .fetch_all(&mut **db)
+    .await
+    .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
 
-//     Ok(Json(transactions))
-// }
+    Ok(Json(transactions))
+}
 
-// #[delete("/api/transactions/<id>")]
-// async fn delete_transaction(mut db: Connection<Db>, id: i32) -> Result<Status, Custom<String>> {
-//     sqlx::query!(
-//         "DELETE FROM transactions WHERE id = $1",
-//         id
-//     )
-//     .execute(&mut **db)
-//     .await
-//     .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
+#[delete("/api/transactions/<id>")]
+async fn delete_transaction(mut db: Connection<Db>, id: i32) -> Result<Status, Custom<String>> {
+    sqlx::query!(
+        "DELETE FROM transactions WHERE id = $1",
+        id
+    )
+    .execute(&mut **db)
+    .await
+    .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
 
-//     Ok(Status::NoContent)
-// }
+    Ok(Status::NoContent)
+}
 
-// #[delete("/api/transactions")]
-// async fn destroy_transactions(mut db: Connection<Db>) -> Result<()> {
-//     sqlx::query!("DELETE FROM transactions").execute(&mut **db).await?;
+#[delete("/api/transactions")]
+async fn destroy_transactions(mut db: Connection<Db>) -> Result<()> {
+    sqlx::query!("DELETE FROM transactions").execute(&mut **db).await?;
 
-//     Ok(())
-// }
+    Ok(())
+}
 
 async fn run_migrations(rocket: Rocket<Build>) -> fairing::Result {
     let should_migrate = env::var("RUN_MIGRATIONS")
@@ -515,55 +446,70 @@ async fn process_transaction(tx: Transaction) -> Result<(), Custom<String>> {
     }
 }
 
-// pub async fn transaction_scheduler(pool: sqlx::PgPool) -> Result<(), Custom<String>> {
-//     let mut ticker = interval(Duration::from_secs(5));
-//     loop {
-//         ticker.tick().await;
-//         let now = Utc::now().timestamp_millis();
+pub async fn transaction_scheduler(pool: sqlx::PgPool) -> Result<(), Custom<String>> {
+    let mut ticker = interval(Duration::from_secs(5));
+    loop {
+        ticker.tick().await;
+        let now = Utc::now().timestamp_millis();
 
-//         // TODO: Move all transactions that are affected to another table - completed transactions or something.
-//         let transactions = sqlx::query_as!(Transaction, "SELECT * FROM transactions WHERE scheduled_time <= $1", now)
-//             .fetch_all(&pool)
-//             .await.map_err(|e| Custom(Status::InternalServerError, format!("Scheduler to grab transactions from database, {}", e)))?;
+        // TODO: Move all transactions that are affected to another table - completed transactions or something.
+        let transactions = sqlx::query_as!(
+            Transaction,
+            r#"
+            SELECT
+                id,
+                challenge_id,
+                created_at,
+                scheduled_time,
+                source_data_location,
+                data_intended_location,
+                rows_to_push,
+                access_bindings as "access_bindings: DbJson<Vec<AccessBinding>>"
+            FROM 
+                transactions
+            WHERE
+                scheduled_time <= $1
+            "#, 
+            now)
+            .fetch_all(&pool)
+            .await.map_err(|e| Custom(Status::InternalServerError, format!("Scheduler to grab transactions from database, {}", e)))?;
 
-//         for tx in transactions {
-//             process_transaction(tx).await?;
-//         }
-//     }
-// }
+        for tx in transactions {
+            process_transaction(tx).await?;
+        }
+    }
+}
 
-// fn scheduler_fairing() -> AdHoc {
-//     AdHoc::on_ignite("Transaction Scheduler", |rocket| async {
-//         // We don't use Db<PgPool> here, since connection is only used inside of a request guard
-//         let db = rocket.state::<Db>().expect("Db not initialized");
-//         let pool = db.0.clone();
-//         tokio::spawn(transaction_scheduler(pool.clone()));
-//         rocket
-//     })
-// }
+fn scheduler_fairing() -> AdHoc {
+    AdHoc::on_ignite("Transaction Scheduler", |rocket| async {
+        // We don't use Db<PgPool> here, since connection is only used inside of a request guard
+        let db = rocket.state::<Db>().expect("Db not initialized");
+        let pool = db.0.clone();
+        tokio::spawn(transaction_scheduler(pool.clone()));
+        rocket
+    })
+}
 
 pub fn rocket_from_config(figment: Figment) -> Rocket<Build> {
     let rocket_build = rocket::custom(figment)
         .attach(Db::init())
         .attach(AdHoc::try_on_ignite("SQLx Migrations", run_migrations))
-        .mount("/", routes![add_challenge, get_challenges]);
-        // .mount("/", routes![
-        //     add_challenge,
-        //     get_challenges,
-        //     delete_challenge,
-        //     destroy_challenges,
-        //     get_transactions,
-        //     delete_transaction,
-        //     destroy_transactions
-        // ]);
+        .mount("/", routes![
+            add_challenge,
+            get_challenges,
+            delete_challenge,
+            destroy_challenges,
+            get_transactions,
+            delete_transaction,
+            destroy_transactions
+        ]);
 
     let attach_scheduler = env::var("ATTACH_SCHEDULER")
         .map(|v| v == "true")
         .unwrap_or(false);
 
     if attach_scheduler {
-        rocket_build
-        // rocket_build.attach(scheduler_fairing())
+        rocket_build.attach(scheduler_fairing())
     }
 
     else {
