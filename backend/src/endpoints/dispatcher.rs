@@ -1,3 +1,4 @@
+use rand::seq::IndexedRandom;
 use rocket::{delete, fairing, get, post, routes, Build, Rocket}; // Have to do this as long as src/lib.rs contains `pub mod endpoints;`, as it breaks #[macro_use]
 use rocket::{fairing::AdHoc, figment::Figment, response::status::Custom, http::Status};
 use rocket::serde::{Serialize, Deserialize, json::Json};
@@ -11,6 +12,12 @@ use std::path::Path;
 use std::env;
 use tokio::time::{interval, Duration};
 use chrono::Utc;
+
+// use rand::seq::SliceRandom;
+use rand::Rng;
+
+
+// TODO: Add check to challenges; check if no two identical dispatches_to locations
 
 // TODO: Add some sort of checking to ensure if transactions.rows_to_push it is actually a 'range'? - Not enforced in any other way, I mean...
 // ... can be done through making a custom constructor transactions::new() and having the function there...
@@ -104,7 +111,7 @@ pub struct Challenge {
     pub init_dataset_name: Option<String>,
     pub init_dataset_description: Option<String>,
 
-    // Option fields\
+    // Option fields\JsonDb
     pub dispatches_to: Vec<DispatchTarget>,
     pub time_of_first_release: i64,
     pub release_proportions: Vec<f64>,
@@ -124,7 +131,8 @@ pub struct Transaction {
     // Transaction info fields
     pub scheduled_time: i64,
     pub source_data_location: Option<String>,
-    pub data_intended_location: String,
+    pub dispatch_location: Option<DispatchTarget>,
+    pub data_intended_location: Option<String>,
     pub rows_to_push: Option<Vec<i32>>,
 
     pub access_bindings: Option<DbJson<Vec<AccessBinding>>>,
@@ -150,17 +158,18 @@ struct CompletedTransaction {
     created_at: Option<i64>,
 
     scheduled_time: i64,
-    source_data_location: String,
-    data_intended_location: String,
+    source_data_location: Option<String>,
+    pub dispatch_location: Option<DispatchTarget>,
+    data_intended_location: Option<String>,
     rows_to_push: Option<Vec<i32>>,
-    
+
+    access_bindings: Option<DbJson<Vec<AccessBinding>>>,
+
     // Status fields - for completed transactions
     attempted_at: Option<i64>,
     transaction_status: TransactionStatus,
     stdout: Option<String>,
     stderr: Option<String>,
-
-    access_bindings: Option<DbJson<Vec<AccessBinding>>>,
 }
 
 #[post("/api/challenges", data = "<challenge>")]
@@ -217,25 +226,39 @@ async fn add_transactions_into_db(
     db: &mut Connection<Db>,
     transactions: &[Transaction],
 ) -> Result<u64, Custom<String>> {
-    
     if transactions.is_empty() {
         return Ok(0);
     }
 
-    let mut query = String::from("INSERT INTO transactions (challenge_id, scheduled_time, source_data_location, data_intended_location, rows_to_push) VALUES ");
+    let mut query = String::from(
+        "INSERT INTO transactions (
+            challenge_id,
+            scheduled_time,
+            source_data_location,
+            data_intended_location,
+            rows_to_push,
+            dispatch_location,
+            access_bindings
+        ) VALUES ",
+    );
+
     let mut args = sqlx::postgres::PgArguments::default();
 
     for (i, tx) in transactions.iter().enumerate() {
         if i > 0 {
             query.push_str(", ");
         }
+
+        let base = i * 7;
         query.push_str(&format!(
-            "(${}, ${}, ${}, ${}, ${})",
-            i * 5 + 1,
-            i * 5 + 2,
-            i * 5 + 3,
-            i * 5 + 4,
-            i * 5 + 5
+            "(${}, ${}, ${}, ${}, ${}, ${}, ${})",
+            base + 1,
+            base + 2,
+            base + 3,
+            base + 4,
+            base + 5,
+            base + 6,
+            base + 7
         ));
 
         args.add(tx.challenge_id);
@@ -243,11 +266,10 @@ async fn add_transactions_into_db(
         args.add(&tx.source_data_location);
         args.add(&tx.data_intended_location);
         args.add(&tx.rows_to_push);
+        args.add(&tx.dispatch_location);
+        args.add(&tx.access_bindings);
     }
 
-    // A shame here we can't use compile-time checked sql, since bulk insert and whatnot. A fucking shame
-    // Also a fucking shame getting caught up on a single fucking deref * as well, fucking shoot me
-    // There is no moral dilemmad, do you hop in front of the moving trolley? Yes!
     let affected = sqlx::query_with(&query, args)
         .execute(&mut ***db)
         .await
@@ -266,11 +288,12 @@ pub fn transactions_from_challenge(challenge: Challenge) -> Result<Vec<Transacti
     for (i, release_proportion) in challenge.release_proportions.iter().enumerate() {
         let scheduled_time = challenge.time_of_first_release
             + challenge.time_between_releases * i as i64;
-
+        
         // Old implementation, added all data points that should be included... may be useful still...
         // let rows_to_push_count = (release_proportion * challenge.init_dataset_rows as f64).round() as i32;
         // let rows_to_push = (0..rows_to_push_count).collect::<Vec<i32>>();   
 
+        // TODO: Consider option to have each portion randomly split between dispatch_locations...
         let rows_from = (running_proportion * challenge.init_dataset_rows as f64).round() as i32;
         let rows_to = ((running_proportion + release_proportion) * challenge.init_dataset_rows as f64).round() as i32;
         let rows_to_push = vec![rows_from, rows_to];
@@ -281,17 +304,29 @@ pub fn transactions_from_challenge(challenge: Challenge) -> Result<Vec<Transacti
             Custom(Status::BadRequest, "Missing challenge ID".to_string())
         })?;
 
-        let transaction = Transaction {
-            id: None,
-            challenge_id: challenge_id,
-            created_at: None,
-            scheduled_time,
-            source_data_location: Some(challenge.init_dataset_location.clone()),
-            data_intended_location: format!("release_{}", i),
-            rows_to_push: Some(rows_to_push),
-            access_bindings: challenge.access_bindings.clone()
-        };
-        transactions.push(transaction);
+        
+        // TODO: Consider if this is safe behavior... can it panic?
+        // Random slice of Dispatches to
+        let mut rng: rand::prelude::ThreadRng = rand::rng();
+        let n = rng.random_range(1..=challenge.dispatches_to.len());
+        let dispatch_locations = challenge.dispatches_to
+            .choose_multiple(&mut rng, n); 
+
+        // TODO: We can avoid unecessary cloning by using shuffling with .drain(..n)
+        for item in dispatch_locations.cloned() {
+            let transaction = Transaction {
+                id: None,
+                challenge_id: challenge_id,
+                created_at: None,
+                scheduled_time,
+                source_data_location: Some(challenge.init_dataset_location.clone()),
+                dispatch_location: Some(item),
+                data_intended_location: Some(format!("challenge_{}_{}_release_{}", challenge_id, challenge.challenge_name, i)),
+                rows_to_push: Some(rows_to_push.clone()),
+                access_bindings: challenge.access_bindings.clone()
+            };
+            transactions.push(transaction);
+        }
     }
 
     Ok(transactions)
@@ -359,6 +394,7 @@ async fn get_transactions(mut db: Connection<Db>) -> Result<Json<Vec<Transaction
             created_at,
             scheduled_time,
             source_data_location,
+            dispatch_location as "dispatch_location: DispatchTarget",
             data_intended_location,
             rows_to_push,
             access_bindings as "access_bindings: DbJson<Vec<AccessBinding>>"
@@ -462,6 +498,7 @@ pub async fn transaction_scheduler(pool: sqlx::PgPool) -> Result<(), Custom<Stri
                 created_at,
                 scheduled_time,
                 source_data_location,
+                dispatch_location as "dispatch_location: DispatchTarget",
                 data_intended_location,
                 rows_to_push,
                 access_bindings as "access_bindings: DbJson<Vec<AccessBinding>>"

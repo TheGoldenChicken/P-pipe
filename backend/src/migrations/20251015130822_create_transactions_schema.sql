@@ -10,8 +10,8 @@ CREATE TABLE IF NOT EXISTS transactions (
     -- Transaction info fields
     scheduled_time BIGINT NOT NULL,
     source_data_location TEXT,
-    data_intended_location TEXT NOT NULL,
-    
+    dispatch_location dispatch_target, -- If null, assume it is an access binding update
+    data_intended_location TEXT,
     rows_to_push INTEGER[],
 
     access_bindings jsonB
@@ -26,14 +26,14 @@ CREATE TABLE IF NOT EXISTS completed_transactions (
     -- Transaction info fields
     scheduled_time BIGINT NOT NULL,
     source_data_location TEXT,
-    data_intended_location TEXT NOT NULL,
+    dispatch_location dispatch_target, -- If null, assume it is an access binding update
+    data_intended_location TEXT,
     rows_to_push INTEGER[],
 
     access_bindings jsonB, 
 
     -- Status fields
     attempted_at BIGINT,
-    -- transaction_status transaction_status_enum NOT NULL,
     transaction_status transaction_status_enum NOT NULL,
     stdout TEXT,
     stderr TEXT
