@@ -489,3 +489,18 @@ Also need to add functionality to move attemped transactions to `completed_trans
 Might wanna look into new way of having priorities in Github, right now, I can kinda get it to work (all having same priority, I can just reorder them), but it doesn't show a nice story of what was high- and low-priority at different times. 
 
 This has been quite fast and informative. Also ended up using `transaction_status` as an enum, since what I learned from `dispatches_to`, challengees-side, so that's nice!
+
+
+# 27-10-2025
+
+Worked a bit on making backend work for new implementation of challenges and transactions. No troubles really.
+
+Added `dispatch_location` column to transactions, reckon that's easier to go by, than splitting `data_intended_location` on keywords.
+
+Right now, we just get a number of random places to dispatch to for each slice of data. That can be changed. Each slice of data should maybe also be split between different locations.
+Whatever, can do later. Didn't take too long to implement what was implemented. ~1 hour.
+
+Started writing tests, but then realized I need to account for the randomness... Shit. How the hell do I unit test that? Might be I'll have to seed the thing? But then how will I know the outcome, and will I have to recheck it every single time?
+Best way to test is probably to avoid the randomness alltogether, and then test the randomness by proptesting or something?
+
+Maybe...
