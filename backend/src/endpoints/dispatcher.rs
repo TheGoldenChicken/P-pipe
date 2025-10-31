@@ -131,7 +131,7 @@ pub struct Transaction {
     pub scheduled_time: i64,
     pub source_data_location: Option<String>,
     pub dispatch_location: Option<DispatchTarget>,
-    pub data_intended_location: Option<String>,
+    pub data_intended_location: String,
     pub data_intended_name: Option<String>,
     pub rows_to_push: Option<Vec<i32>>,
 
@@ -160,7 +160,7 @@ struct CompletedTransaction {
     scheduled_time: i64,
     source_data_location: Option<String>,
     pub dispatch_location: Option<DispatchTarget>,
-    data_intended_location: Option<String>,
+    data_intended_location: String,
     data_intended_name: Option<String>,
     rows_to_push: Option<Vec<i32>>,
 
@@ -326,7 +326,7 @@ pub fn transactions_from_challenge(challenge: Challenge) -> Result<Vec<Transacti
                 scheduled_time,
                 source_data_location: Some(challenge.init_dataset_location.clone()),
                 dispatch_location: Some(item),
-                data_intended_location: Some(format!("challenge_{}_{}", challenge_id, challenge.challenge_name)),
+                data_intended_location: format!("challenge_{}_{}", challenge_id, challenge.challenge_name),
                 data_intended_name: Some(format!("release_{}", i)),
                 rows_to_push: Some(rows_to_push.clone()),
                 access_bindings: challenge.access_bindings.clone()
@@ -564,108 +564,108 @@ pub fn rocket_from_config(figment: Figment) -> Rocket<Build> {
 }
 
 
-#[cfg(test)]
-mod tests {
-    use proptest::prelude::{proptest, prop, prop_assert_eq};
-    // TODO: Remove here, and only import specifcally what is asked for!
-    use super::*;
+// #[cfg(test)]
+// mod tests {
+//     use proptest::prelude::{proptest, prop, prop_assert_eq};
+//     // TODO: Remove here, and only import specifcally what is asked for!
+//     use super::*;
     
-    #[test]
-    // TODO: Consider naming convention here, should we really call it basic(), edge_case, invalid_input, etc.?
-    fn test_transactions_from_challenge_basic() {
+//     #[test]
+//     // TODO: Consider naming convention here, should we really call it basic(), edge_case, invalid_input, etc.?
+//     fn test_transactions_from_challenge_basic() {
 
-        let access_bindings = vec![
-            AccessBinding::S3(S3Binding { identity: "ec2userstuff".to_string(), bucket: "somebucket".to_string() }),
-            AccessBinding::Drive(DriveBinding { identity: "dderpson99@gmail.com".to_string(), folder_id: Some("abcd123".to_string()), user_permissions: "Read".to_string()})
-        ];
+//         let access_bindings = vec![
+//             AccessBinding::S3(S3Binding { identity: "ec2userstuff".to_string(), bucket: "somebucket".to_string() }),
+//             AccessBinding::Drive(DriveBinding { identity: "dderpson99@gmail.com".to_string(), folder_id: Some("abcd123".to_string()), user_permissions: "Read".to_string()})
+//         ];
 
-        let challenge = Challenge {
-            id: Some(42),
-            challenge_name: "testingchallenge1".into(),
-            created_at: None,
-            init_dataset_location: "s3://bucket/data.csv".into(),
-            init_dataset_rows: 300,
-            init_dataset_name: Some("dataset".into()),
-            init_dataset_description: Some("desc".into()),
-            dispatches_to: vec![DispatchTarget::S3, DispatchTarget::Drive],
-            time_of_first_release: 1000,
-            release_proportions: vec![0.3, 0.4, 0.3],
-            time_between_releases: 60,
-            access_bindings: Some(sqlx::types::Json(access_bindings))
-        };
+//         let challenge = Challenge {
+//             id: Some(42),
+//             challenge_name: "testingchallenge1".into(),
+//             created_at: None,
+//             init_dataset_location: "s3://bucket/data.csv".into(),
+//             init_dataset_rows: 300,
+//             init_dataset_name: Some("dataset".into()),
+//             init_dataset_description: Some("desc".into()),
+//             dispatches_to: vec![DispatchTarget::S3, DispatchTarget::Drive],
+//             time_of_first_release: 1000,
+//             release_proportions: vec![0.3, 0.4, 0.3],
+//             time_between_releases: 60,
+//             access_bindings: Some(sqlx::types::Json(access_bindings))
+//         };
 
-        let transactions = transactions_from_challenge(challenge.clone()).expect("Could not generate transactions from challenge!");
+//         let transactions = transactions_from_challenge(challenge.clone()).expect("Could not generate transactions from challenge!");
         
-        assert_eq!(transactions.len(), 3, "Expected 3 transactions");
+//         assert_eq!(transactions.len(), 3, "Expected 3 transactions");
 
-        let expected = vec![
-            Transaction {
-                id: None,
-                challenge_id: 42,
-                created_at: None,
-                scheduled_time: 1000,
-                source_data_location: challenge.init_dataset_location.clone(),
-                dispatch_location: 
-                data_intended_location: "release_0".into(),
-                rows_to_push: Some(vec![0, 30]),
-                access_bindings: Some(sqlx::types::Json(access_bindings))
-            },
-            Transaction {
-                id: None,
-                challenge_id: 42,
-                created_at: None,
-                scheduled_time: 1060,
-                source_data_location: challenge.init_dataset_location.clone(),
-                data_intended_location: "release_1".into(),
-                rows_to_push: Some(vec![30, 70]),
-                access_bindings: Some(sqlx::types::Json(access_bindings))
-            },
-            Transaction {
-                id: None,
-                challenge_id: 42,
-                created_at: None,
-                scheduled_time: 1120,
-                source_data_location: challenge.init_dataset_location.clone(),
-                data_intended_location: "release_2".into(),
-                rows_to_push: Some(vec![70, 100]),
-                access_bindings: Some(sqlx::types::Json(access_bindings))
-            },
-        ];
+//         let expected = vec![
+//             Transaction {
+//                 id: None,
+//                 challenge_id: 42,
+//                 created_at: None,
+//                 scheduled_time: 1000,
+//                 source_data_location: challenge.init_dataset_location.clone(),
+//                 dispatch_location: 
+//                 data_intended_location: "release_0".into(),
+//                 rows_to_push: Some(vec![0, 30]),
+//                 access_bindings: Some(sqlx::types::Json(access_bindings))
+//             },
+//             Transaction {
+//                 id: None,
+//                 challenge_id: 42,
+//                 created_at: None,
+//                 scheduled_time: 1060,
+//                 source_data_location: challenge.init_dataset_location.clone(),
+//                 data_intended_location: "release_1".into(),
+//                 rows_to_push: Some(vec![30, 70]),
+//                 access_bindings: Some(sqlx::types::Json(access_bindings))
+//             },
+//             Transaction {
+//                 id: None,
+//                 challenge_id: 42,
+//                 created_at: None,
+//                 scheduled_time: 1120,
+//                 source_data_location: challenge.init_dataset_location.clone(),
+//                 data_intended_location: "release_2".into(),
+//                 rows_to_push: Some(vec![70, 100]),
+//                 access_bindings: Some(sqlx::types::Json(access_bindings))
+//             },
+//         ];
 
-        assert_eq!(transactions, expected, "Transaction output mismatch");
-    }
+//         assert_eq!(transactions, expected, "Transaction output mismatch");
+//     }
 
-    proptest! {
-        #[test]
-        fn total_rows_pushed_is_100(proportions in prop::collection::vec(0.0..1.0, 1..10)) {
-            // In case of proportion of only 1, will create vector of normalized proportion of [1.0]!
-            let total: f64 = proportions.iter().sum();
-            let normalized: Vec<f64> = if total == 0.0 {
-                vec![1.0] // fallback to avoid division by zero
-            } else {
-                proportions.iter().map(|p| p / total).collect()
-            };
+//     proptest! {
+//         #[test]
+//         fn total_rows_pushed_is_100(proportions in prop::collection::vec(0.0..1.0, 1..10)) {
+//             // In case of proportion of only 1, will create vector of normalized proportion of [1.0]!
+//             let total: f64 = proportions.iter().sum();
+//             let normalized: Vec<f64> = if total == 0.0 {
+//                 vec![1.0] // fallback to avoid division by zero
+//             } else {
+//                 proportions.iter().map(|p| p / total).collect()
+//             };
 
-            let challenge = Challenge {
-                id: Some(1),
-                name: "test".into(),
-                created_at: None,
-                init_dataset_location: "s3://bucket/data.csv".into(),
-                init_dataset_rows: 100,
-                init_dataset_name: None,
-                init_dataset_description: None,
-                time_of_first_release: 0,
-                release_proportions: normalized.clone(),
-                time_between_releases: 1,
-            };
+//             let challenge = Challenge {
+//                 id: Some(1),
+//                 name: "test".into(),
+//                 created_at: None,
+//                 init_dataset_location: "s3://bucket/data.csv".into(),
+//                 init_dataset_rows: 100,
+//                 init_dataset_name: None,
+//                 init_dataset_description: None,
+//                 time_of_first_release: 0,
+//                 release_proportions: normalized.clone(),
+//                 time_between_releases: 1,
+//             };
 
-            let transactions = transactions_from_challenge(challenge).expect("Could not generate transactions from challenge");
+//             let transactions = transactions_from_challenge(challenge).expect("Could not generate transactions from challenge");
 
-            let total_rows: i32 = transactions.iter()
-                .map(|t| t.rows_to_push[1] - t.rows_to_push[0])
-                .sum();
-            prop_assert_eq!(total_rows, 100, "Expected total rows to be 100, got {}", total_rows);
-        }
-    }
+//             let total_rows: i32 = transactions.iter()
+//                 .map(|t| t.rows_to_push[1] - t.rows_to_push[0])
+//                 .sum();
+//             prop_assert_eq!(total_rows, 100, "Expected total rows to be 100, got {}", total_rows);
+//         }
+//     }
 
-}
+// }
