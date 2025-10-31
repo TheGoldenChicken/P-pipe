@@ -11,7 +11,8 @@ CREATE TABLE IF NOT EXISTS transactions (
     scheduled_time BIGINT NOT NULL,
     source_data_location TEXT,
     dispatch_location dispatch_target, -- If null, assume it is an access binding update
-    data_intended_location TEXT,
+    data_intended_location TEXT, -- Folder (or similar structure) that we'll push the data to
+    data_intended_name TEXT, -- Name of the single data slice that'll be in the folder
     rows_to_push INTEGER[],
 
     access_bindings jsonB
@@ -27,7 +28,8 @@ CREATE TABLE IF NOT EXISTS completed_transactions (
     scheduled_time BIGINT NOT NULL,
     source_data_location TEXT,
     dispatch_location dispatch_target, -- If null, assume it is an access binding update
-    data_intended_location TEXT,
+    data_intended_location TEXT, 
+    data_intended_name TEXT,
     rows_to_push INTEGER[],
 
     access_bindings jsonB, 

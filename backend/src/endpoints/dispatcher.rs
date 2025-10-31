@@ -13,8 +13,7 @@ use std::env;
 use tokio::time::{interval, Duration};
 use chrono::Utc;
 
-// use rand::seq::SliceRandom;
-use rand::Rng;
+    use rand::Rng;
 
 
 // TODO: Add check to challenges; check if no two identical dispatches_to locations
@@ -133,6 +132,7 @@ pub struct Transaction {
     pub source_data_location: Option<String>,
     pub dispatch_location: Option<DispatchTarget>,
     pub data_intended_location: Option<String>,
+    pub data_intended_name: Option<String>,
     pub rows_to_push: Option<Vec<i32>>,
 
     pub access_bindings: Option<DbJson<Vec<AccessBinding>>>,
@@ -161,6 +161,7 @@ struct CompletedTransaction {
     source_data_location: Option<String>,
     pub dispatch_location: Option<DispatchTarget>,
     data_intended_location: Option<String>,
+    data_intended_name: Option<String>,
     rows_to_push: Option<Vec<i32>>,
 
     access_bindings: Option<DbJson<Vec<AccessBinding>>>,
@@ -222,6 +223,7 @@ async fn add_challenge(
 }
 
 
+// TODO IMPORTANT: Really have a good dig into this one, will fail regularly if we don't find a better way of structuring it, and we'll have no idea why it fails...
 async fn add_transactions_into_db(
     db: &mut Connection<Db>,
     transactions: &[Transaction],
@@ -236,6 +238,7 @@ async fn add_transactions_into_db(
             scheduled_time,
             source_data_location,
             data_intended_location,
+            data_intended_name,
             rows_to_push,
             dispatch_location,
             access_bindings
@@ -248,23 +251,25 @@ async fn add_transactions_into_db(
         if i > 0 {
             query.push_str(", ");
         }
-
-        let base = i * 7;
+        
+        let base = i * 8;
         query.push_str(&format!(
-            "(${}, ${}, ${}, ${}, ${}, ${}, ${})",
+            "(${}, ${}, ${}, ${}, ${}, ${}, ${}, ${})",
             base + 1,
             base + 2,
             base + 3,
             base + 4,
             base + 5,
             base + 6,
-            base + 7
+            base + 7,
+            base + 8
         ));
 
         args.add(tx.challenge_id);
         args.add(tx.scheduled_time);
         args.add(&tx.source_data_location);
         args.add(&tx.data_intended_location);
+        args.add(&tx.data_intended_name);
         args.add(&tx.rows_to_push);
         args.add(&tx.dispatch_location);
         args.add(&tx.access_bindings);
@@ -321,7 +326,8 @@ pub fn transactions_from_challenge(challenge: Challenge) -> Result<Vec<Transacti
                 scheduled_time,
                 source_data_location: Some(challenge.init_dataset_location.clone()),
                 dispatch_location: Some(item),
-                data_intended_location: Some(format!("challenge_{}_{}_release_{}", challenge_id, challenge.challenge_name, i)),
+                data_intended_location: Some(format!("challenge_{}_{}", challenge_id, challenge.challenge_name)),
+                data_intended_name: Some(format!("release_{}", i)),
                 rows_to_push: Some(rows_to_push.clone()),
                 access_bindings: challenge.access_bindings.clone()
             };
@@ -396,6 +402,7 @@ async fn get_transactions(mut db: Connection<Db>) -> Result<Json<Vec<Transaction
             source_data_location,
             dispatch_location as "dispatch_location: DispatchTarget",
             data_intended_location,
+            data_intended_name,
             rows_to_push,
             access_bindings as "access_bindings: DbJson<Vec<AccessBinding>>"
         FROM 
@@ -500,6 +507,7 @@ pub async fn transaction_scheduler(pool: sqlx::PgPool) -> Result<(), Custom<Stri
                 source_data_location,
                 dispatch_location as "dispatch_location: DispatchTarget",
                 data_intended_location,
+                data_intended_name,
                 rows_to_push,
                 access_bindings as "access_bindings: DbJson<Vec<AccessBinding>>"
             FROM 
@@ -565,17 +573,25 @@ mod tests {
     #[test]
     // TODO: Consider naming convention here, should we really call it basic(), edge_case, invalid_input, etc.?
     fn test_transactions_from_challenge_basic() {
+
+        let access_bindings = vec![
+            AccessBinding::S3(S3Binding { identity: "ec2userstuff".to_string(), bucket: "somebucket".to_string() }),
+            AccessBinding::Drive(DriveBinding { identity: "dderpson99@gmail.com".to_string(), folder_id: Some("abcd123".to_string()), user_permissions: "Read".to_string()})
+        ];
+
         let challenge = Challenge {
             id: Some(42),
-            name: "Test Challenge".into(),
+            challenge_name: "testingchallenge1".into(),
             created_at: None,
             init_dataset_location: "s3://bucket/data.csv".into(),
-            init_dataset_rows: 100,
+            init_dataset_rows: 300,
             init_dataset_name: Some("dataset".into()),
             init_dataset_description: Some("desc".into()),
+            dispatches_to: vec![DispatchTarget::S3, DispatchTarget::Drive],
             time_of_first_release: 1000,
             release_proportions: vec![0.3, 0.4, 0.3],
             time_between_releases: 60,
+            access_bindings: Some(sqlx::types::Json(access_bindings))
         };
 
         let transactions = transactions_from_challenge(challenge.clone()).expect("Could not generate transactions from challenge!");
@@ -589,8 +605,10 @@ mod tests {
                 created_at: None,
                 scheduled_time: 1000,
                 source_data_location: challenge.init_dataset_location.clone(),
+                dispatch_location: 
                 data_intended_location: "release_0".into(),
-                rows_to_push: vec![0, 30],
+                rows_to_push: Some(vec![0, 30]),
+                access_bindings: Some(sqlx::types::Json(access_bindings))
             },
             Transaction {
                 id: None,
@@ -599,7 +617,8 @@ mod tests {
                 scheduled_time: 1060,
                 source_data_location: challenge.init_dataset_location.clone(),
                 data_intended_location: "release_1".into(),
-                rows_to_push: vec![30, 70],
+                rows_to_push: Some(vec![30, 70]),
+                access_bindings: Some(sqlx::types::Json(access_bindings))
             },
             Transaction {
                 id: None,
@@ -608,7 +627,8 @@ mod tests {
                 scheduled_time: 1120,
                 source_data_location: challenge.init_dataset_location.clone(),
                 data_intended_location: "release_2".into(),
-                rows_to_push: vec![70, 100],
+                rows_to_push: Some(vec![70, 100]),
+                access_bindings: Some(sqlx::types::Json(access_bindings))
             },
         ];
 
