@@ -1,31 +1,20 @@
 import click
 import json
-
-from dispatchers.drive_dispatcher.drive_utils import build_drive_service
-from dispatchers.drive_dispatcher.drive_dispatcher import combined_drive_dispatch_workflow
-from fetchers.misc_fetchers import local_csv_data_fetcher
-
-# TODO: IMPORTANT: Add "dispatcher" as part to each transaction (should simplify how we do dispatches significantly, since we don't need to infer from location)
-
-# TODO: Either:
-    # - Some "initial dispatch check", to ensure whether the needed initialization of the directory/thingy has already been performed
-    # - OR At least a checker for share_information for drive like "ya donkey, ya forgot the share information!"
+import rclone_functions
 
 
-REQUIRED_FIELDS = [
-    "dispatcher",
-    "challenge_id",
-    "scheduled_time",
-    "source_data_location",
-    "data_intended_location",
-    "rows_to_push"
-]
+# TODO: Currently missing functionality
+# 1. Giving other users permission to drive and s3 buckets
+    # May be particularly difficult for drive folders, since they require that we know their ID (fixable by adding UUIDs)
+    # *will* require us to go outside rclone functionality, RIP
+# 2. Initializing folders, s3 buckets and whatnot
+    # should be trivial with rclone.mkdir()
+# 3. validating that a transaction is formatted correctly, (contains correct values and whatnot)
+# 4. Adding UUIDs as part of each challenge and/or transaction
+# 5. Adding generalized data readers for multiple file types (fetchers)
+# 6. adding generalized data savers, so these read files can also be subdivided
+    #   ...and locally saved in a proper manner for multiple file types (savers)
 
-OPTIONAL_FIELDS = {
-    "should_overwrite": False,  # default value
-    "share_information": None,
-    "notify_user": None
-}
 
 def unpack_transaction_json(transaction: str):
     try:
@@ -33,113 +22,153 @@ def unpack_transaction_json(transaction: str):
     except json.JSONDecodeError as e:
         raise ValueError(f"Invalid JSON: {e}")
 
-    missing = [field for field in REQUIRED_FIELDS if field not in parsed]
-    if missing:
-        raise ValueError(f"Missing required fields: {', '.join(missing)}")
+    # missing = [field for field in REQUIRED_FIELDS if field not in parsed]
+    # if missing:
+    #     raise ValueError(f"Missing required fields: {', '.join(missing)}")
 
     # Unpack required fields
-    dispatcher = parsed["dispatcher"]
-    challenge_id = parsed["challenge_id"]
-    scheduled_time = parsed["scheduled_time"]
-    source_data_location = parsed["source_data_location"]
-    data_intended_location = parsed["data_intended_location"]
-    rows_to_push = parsed["rows_to_push"]
-
-    # Unpack optional fields with defaults
-    should_overwrite = parsed.get("should_overwrite", OPTIONAL_FIELDS["should_overwrite"])
-
-    return dispatcher, {
-        "challenge_id": challenge_id,
-        "scheduled_time": scheduled_time,
-        "source_data_location": source_data_location,
-        "data_intended_location": data_intended_location,
-        "rows_to_push": rows_to_push,
-        "should_overwrite": should_overwrite
-    }
-
-def unpack_transaction_json_args(transaction: str):
-    try:
-        parsed = json.loads(transaction)
-    except json.JSONDecodeError as e:
-        raise ValueError(f"Invalid JSON: {e}")
-
-    missing = [field for field in REQUIRED_FIELDS if field not in parsed]
-    if missing:
-        raise ValueError(f"Missing required fields: {', '.join(missing)}")
-
-    # Unpack required fields
-    transaction_id = parsed["id"]
-    dispatcher = parsed["dispatcher"]
-    challenge_id = parsed["challenge_id"]
-    scheduled_time = parsed["scheduled_time"]
-    source_data_location = parsed["source_data_location"]
-    data_intended_location = parsed["data_intended_location"]
-    rows_to_push = parsed["rows_to_push"]
-
-    # Unpack optional fields with defaults
-    should_overwrite = parsed.get("should_overwrite", OPTIONAL_FIELDS["should_overwrite"])
-    share_information = parsed.get("share_information", OPTIONAL_FIELDS["share_information"])
-    notify_user = parsed.get("notify_user", OPTIONAL_FIELDS["notify_user"])
-
-    return dispatcher, (
-        transaction_id,
-        challenge_id,
-        scheduled_time,
-        source_data_location,
-        data_intended_location,
-        rows_to_push,
-        should_overwrite,
-        share_information,
-        notify_user
-    )
-
-# TODO IMPORTANT: This looks fucking ugly, see if there isn't a better way to do this without going 100% **kwargs...
-def orchestrator(dispatcher: str, transaction_id, challenge_id, scheduled_time, source_data_location, data_intended_location, rows_to_push, should_overwrite, share_information, notify_user):
-    # TODO: Ok, so now we fetch data before actually checking if they even got the right dispatcher? Maybe find a way to reverse that? Not use match statements perhaps???
+    id = parsed['id']
+    challenge_id = parsed['challenge_id']
+    created_at = parsed['created_at']
+    scheduled_time = parsed['scheduled_time']
     
-    # TODO: Missing case statement based on where the source data is...
-    data_to_dispatch = local_csv_data_fetcher(file_path=source_data_location, rows_to_get=rows_to_push)
+    # Unpack optional fields
+    source_data_location = parsed.get('source_data_location')
+    dispatch_location = parsed.get('dispatch_location')
+    data_intended_location = parsed.get('data_intended_location')
+    data_intended_name = parsed.get('data_intended_name')
+    rows_to_push = parsed.get('rows_to_push')
+    access_bindings = parsed.get('access_bindings')
 
-    match dispatcher.lower():
-        case "drive":
-            drive_service = build_drive_service()
-            data_part_name = f"challenge_{challenge_id}_transaction_{transaction_id}"
-            combined_drive_dispatch_workflow(drive_service=drive_service, drive_folder_name=data_intended_location, drive_folder_description=None,
-                                                share_information=share_information, notify_user=notify_user, data_to_dispatch=data_to_dispatch,
-                                                data_part_name=data_part_name)
-        case _:
-            # TODO: Find fitting exception for this
-            raise(f"{dispatcher} is not a known dispatcher type!")
+    full_dict_return = {
+        'id': id,
+        'challenge_id': challenge_id,
+        'created_at': created_at,
+        'scheduled_time': scheduled_time,
+        'source_data_location': source_data_location, # ACTUALLY USED
+        'dispatch_location': dispatch_location, # ACTUALLY USED
+        'data_intended_location': data_intended_location, # ACTUALLY USED
+        'data_intended_name': data_intended_name, # ACTUALLY USED
+        'rows_to_push': rows_to_push, # ACTUALLY USED
+        'access_bindings': access_bindings
+    }    
+
+    return full_dict_return
+
+
+# def validate_transaction_dict(transaction_dict):
+#     """Validates whether a transaction dict is viable for what it needs to do
+#     And returns the intended purpose (update of permissions, initilization, or data transaction)
+
+#     Args:
+#         transaction_dict (dict): Dictionary of transaction as returned by unpack_transaction_json
+#     """
+
+
+def orchestrator(transaction_dict):
+
+    dispatch_location = transaction_dict['dispatch_location']
+    rclone_remote = rclone_functions.find_rclone_remote(dispatch_location)
+    if rclone_remote is None:
+        raise ValueError(f"No rclone remote found based on dispatch location: {dispatch_location}")
+
+    # TODO: Replace with variable data loader function
+    import pandas as pd
+    source_data_location = transaction_dict['source_data_location']
+    data_to_from = transaction_dict['rows_to_push']
+    # from pathlib import Path
+    # source_data_location = Path(source_data_location).resolve()
+    data_part: pd.DataFrame = pd.read_csv(source_data_location)[data_to_from[0]:data_to_from[1]]
+    
+    # TODO: Add some type of sanitizer to ensure that names are compatible with the chosen platform
+    data_intended_location = transaction_dict['data_intended_location']
+    import os
+    local_folder_path = os.path.join("transaction_releases", data_intended_location)
+    os.makedirs(local_folder_path, exist_ok=True)
+
+    data_intended_name = transaction_dict['data_intended_name']
+    full_data_part_path = os.path.join(local_folder_path, data_intended_name)
+    data_part.to_csv(full_data_part_path)
+
+    rclone_functions.rclone_copy_file(full_data_part_path, 
+                                      rclone_remote_name=rclone_remote,
+                                      folder_name=data_intended_location)
 
 
 @click.command()
 @click.option("--transaction", required=True, help="transaction as JSON string")
 def orchestrator_cli(transaction):
-    dispatcher, args = unpack_transaction_json_args(transaction)
-    orchestrator(dispatcher, *args)
+    transaction_dict = unpack_transaction_json(transaction)
+    orchestrator(transaction_dict)
 
 if __name__ == "__main__":
     orchestrator_cli()
 
-
-    {
-        "id": 11,
-        "challenge_id": 4,
-        "created_at": 1758633913,
+    example_input = {
+        "id": 1,
+        "challenge_id": 1,
+        "created_at": 1761920926,
         "scheduled_time": 5000,
         "source_data_location": "/home/cicero/ppipe/py_modules/tests/test_data/iris.csv",
-        "data_intended_location": "test_release",
+        "dispatch_location": "drive",
+        "data_intended_location": "challenge_1_testingchallenge1",
+        "data_intended_name": "release_0",
         "rows_to_push": [
             0,
             150
         ],
-        "dispatcher": "drive",
-        "share_information": {
-        "type": "user",
-        "role": "reader",
-        "emailAddress": "dderpson99@gmail.com"
-    }
+        "access_bindings": [
+            {
+                "type": "S3",
+                "identity": "arn:aws:iam::123456789012:user/alice",
+                "bucket": "ml-challenges"
+            },
+            {
+                "type": "Drive",
+                "identity": "user:bob@example.com",
+                "folder_id": "abc123",
+                "user_permissions": "editor"
+            },
+            {
+                "type": "Drive",
+                "identity": "user:carol@example.com",
+                "folder_id": None,
+                "user_permissions": "viewer"
+            }
+        ]
     }
 
+
 # test with
-# python py_modules/orchestrator.py --transaction '{"id":11,"challenge_id":4,"created_at":1758633913,"scheduled_time":5000,"source_data_location":"/home/cicero/ppipe/py_modules/tests/test_data/iris.csv","data_intended_location":"test_release","rows_to_push":[0,150],"dispatcher":"drive","share_information":{"type":"user","role":"reader","emailAddress":"dderpson99@gmail.com"}}'
+"""
+$ python py_modules/orchestrator.py --transaction '{
+  "id": 1,
+  "challenge_id": 1,
+  "created_at": 1761920926,
+  "scheduled_time": 5000,
+  "source_data_location": "/home/cicero/ppipe/py_modules/tests/test_data/iris.csv",
+  "dispatch_location": "drive",
+  "data_intended_location": "challenge1testingchallenge1",
+  "data_intended_name": "release_0",
+  "rows_to_push": [0, 150],
+  "access_bindings": [
+    {
+      "type": "S3",
+      "identity": "arn:aws:iam::123456789012:user/alice",
+      "bucket": "ml-challenges"
+    },
+    {
+      "type": "Drive",
+      "identity": "user:bob@example.com",
+      "folder_id": "abc123",
+      "user_permissions": "editor"
+    },
+    {
+      "type": "Drive",
+      "identity": "user:carol@example.com",
+      "folder_id": null,
+      "user_permissions": "viewer"
+    }
+  ]
+}'
+"""
