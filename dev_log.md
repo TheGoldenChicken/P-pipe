@@ -504,3 +504,71 @@ Started writing tests, but then realized I need to account for the randomness...
 Best way to test is probably to avoid the randomness alltogether, and then test the randomness by proptesting or something?
 
 Maybe...
+
+
+# 31-10-2025
+
+Looked into adding s3 buckets through aws, pretty simple with boto3, once I got past the initial hiccups of keys and secrets...
+
+Turns out rclone can do the same thing with the `mkdir` command. Copilot and the internet lied to me (imagine).
+
+Compared `rclone-python` with `rclone`. Both appear to be the same - a wrapper around the rclone CLI. Both need it installed. `rclone-python` appears better. Will go with that.
+
+Wanted to find out more about individual remotes, for example what type they are, no funcitonality in rclone-python for that. Someone suggested a sort of [monkey-patch](https://en.wikipedia.org/wiki/Monkey_patch)
+
+```python
+def type_remotes(remote_name):
+    command = "config show " + remote_name
+    stdout, _ = utils.run_rclone_cmd(command)
+    
+    process_out = stdout.split('\n')
+    for str_out in process_out:
+        str_out = str_out.lower()
+        if str_out.find("type = ")==0:
+            str_out = str_out.replace("type = ","")
+            return str_out
+    return ""
+```
+
+Tried it with `rclone.type_remotes(rclone.get_remotes()[0])` as an example. It works well enough. Will go forward with that. 
+
+Made the following notes for what I wanna make today:
+
+1. [x] Find way of listing rclone remotes (python)
+2. [x] Make kinda switch function that returns correct rclone remote based on names (or types of remotes if that is possible)
+3. [x] Use this with rlone sync or copy or clone (find out the correct one)
+4. [ ] Make auxilliary rclone.mkdir function to run before the other ones
+5. [ ] Make rclone change permissions function
+
+Will get on it.
+
+Got a little stuck on number 3 (gonna stick with copy, since sync is a bit more like Github-ish operations). Basically, can't get it to work for IOBytes, which is shit. Now, I have to save the part of the file I wanna upload, and upload this, removing or keeping the old file. Sigh. But, that may be better, since I guess we kinda want the 'correct' data that we uploaded somewhere saved to a location... 
+
+Can look more into how to do tbis in a smart way, but for now, we'll just save the part files that we're uploading somewhere right before we uplaod them. For that, we might need an extra function like
+
+1. [ ] Make general `save_preprocessed_data` function, that is able to save a wide array of different types of functions in ways that then make sense to upload
+2. [ ] Make general `load_data` function that is able to load a bunch of different formats (not just csvs!) to upload and select the proper rows and whatnot...
+
+Alright, got Rclone uploading to s3 working now, will make into functions with more support
+
+Halfway through implementing this, and it occured to me that having `data_intended_location` as the sole proprietor of where a file will end up, is not a good idea. Added `data_intended_name` as simply the name of the file that'll be added. This way, `data_intended_location` can aid the python file in creating a folder for the local files to keep track of what is uploaded. 
+
+It is a bit of superfluous information, since each transaction within a single challenge, will share folder name, but I really don't think that is that much of an issue.
+
+So I got a barebones version working. `orchestrator_cli` now works so that I can either upload to drive or s3 by seamlessly changing a single value. That is pretty baller if I do say so myself.
+
+For next time, will work on the following:
+TODO: Currently missing functionality
+1. Giving other users permission to drive and s3 buckets
+  - May be particularly difficult for drive folders, since they require that we know their ID (fixable by adding UUIDs)
+   - *will* require us to go outside rclone functionality, RIP
+2. Initializing folders, s3 buckets and whatnot should be trivial with rclone.mkdir()
+3. validating that a transaction is formatted correctly, (contains correct values and whatnot)
+4. Adding UUIDs as part of each challenge and/or transaction
+5. Adding generalized data readers for multiple file types (fetchers)
+6. adding generalized data savers, so these read files can also be subdivided and locally saved in a proper manner for multiple file types (savers)
+
+## Over ALL!:
+- Should work this first working version into the transaction scheduler, just so we can say we have done it.
+
+Overall, this is good progress, we have used $36\%$ of our time, and yet the first-ish version is already complete. That is nice. 
