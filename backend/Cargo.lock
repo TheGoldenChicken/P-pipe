@@ -134,6 +134,7 @@ dependencies = [
  "postgres",
  "postgres-types",
  "proptest",
+ "rand 0.9.2",
  "rocket",
  "rocket_cors",
  "rocket_db_pools",
