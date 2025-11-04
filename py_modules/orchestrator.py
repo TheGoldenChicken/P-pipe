@@ -66,7 +66,14 @@ def unpack_transaction_json(transaction: str):
 
 
 def orchestrator(transaction_dict):
+    """TODO: MISSING DOCSTRING
 
+    Args:
+        transaction_dict (_type_): _description_
+
+    Raises:
+        ValueError: _description_
+    """
     dispatch_location = transaction_dict['dispatch_location']
     rclone_remote = rclone_functions.find_rclone_remote(dispatch_location)
     if rclone_remote is None:
@@ -80,7 +87,8 @@ def orchestrator(transaction_dict):
     # source_data_location = Path(source_data_location).resolve()
     data_part: pd.DataFrame = pd.read_csv(source_data_location)[data_to_from[0]:data_to_from[1]]
     
-    # TODO: Add some type of sanitizer to ensure that names are compatible with the chosen platform
+    transaction_dict = sanitizer(transaction_dict)
+
     data_intended_location = transaction_dict['data_intended_location']
     import os
     local_folder_path = os.path.join("transaction_releases", data_intended_location)
@@ -94,6 +102,33 @@ def orchestrator(transaction_dict):
                                       rclone_remote_name=rclone_remote,
                                       folder_name=data_intended_location)
 
+def sanitizer(transaction_dict):
+    """TEMP SANITIZER
+    TODO: MAKE ACTUALLY BETTER...
+
+    Args:
+        transaction_dict (_type_): _description_
+    """
+
+    if transaction_dict['dispatch_location'].lower() == "s3":
+        transaction_dict['data_intended_location'] = transaction_dict['data_intended_location'].replace("_", "-")
+        transaction_dict['data_intended_name'] = transaction_dict['data_intended_name'].replace("_", "-") 
+
+    return transaction_dict
+
+def make_dir(transaction_dict):
+    dispatch_location = transaction_dict['dispatch_location']
+    rclone_remote = rclone_functions.find_rclone_remote(dispatch_location)
+    if rclone_remote is None:
+        raise ValueError(f"No rclone remote found based on dispatch location: {dispatch_location}")
+
+    folder_name = transaction_dict["data_intended_location"]
+
+    rclone_functions.rclone_init_dir(folder_name, rclone_remote)
+
+@click.group()
+def cli():
+    pass
 
 @click.command()
 @click.option("--transaction", required=True, help="transaction as JSON string")
@@ -101,8 +136,18 @@ def orchestrator_cli(transaction):
     transaction_dict = unpack_transaction_json(transaction)
     orchestrator(transaction_dict)
 
+@click.command()
+@click.option("--transaction", required=True, help="transaction as JSON string")
+def make_dir_cli(transaction):
+    transaction_dict = unpack_transaction_json(transaction)
+    make_dir(transaction_dict)
+
+cli.add_command(orchestrator_cli)
+cli.add_command(make_dir_cli)
+
 if __name__ == "__main__":
-    orchestrator_cli()
+    cli()
+    # orchestrator_cli()
 
     example_input = {
         "id": 1,
@@ -110,7 +155,7 @@ if __name__ == "__main__":
         "created_at": 1761920926,
         "scheduled_time": 5000,
         "source_data_location": "/home/cicero/ppipe/py_modules/tests/test_data/iris.csv",
-        "dispatch_location": "drive",
+        "dispatch_location": "S3",
         "data_intended_location": "challenge_1_testingchallenge1",
         "data_intended_name": "release_0",
         "rows_to_push": [
@@ -141,13 +186,13 @@ if __name__ == "__main__":
 
 # test with
 """
-$ python py_modules/orchestrator.py --transaction '{
+$ python py_modules/orchestrator.py orchestrator-cli --transaction '{
   "id": 1,
   "challenge_id": 1,
   "created_at": 1761920926,
   "scheduled_time": 5000,
   "source_data_location": "/home/cicero/ppipe/py_modules/tests/test_data/iris.csv",
-  "dispatch_location": "drive",
+  "dispatch_location": "S3",
   "data_intended_location": "challenge1testingchallenge1",
   "data_intended_name": "release_0",
   "rows_to_push": [0, 150],

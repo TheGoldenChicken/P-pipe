@@ -23,6 +23,7 @@ def find_rclone_remote(dispatch_location: str):
     # "'return none' is used when there are other possible return values for the function: https://stackoverflow.com/questions/15300550/python-return-return-none-and-no-return-at-all-is-there-any-difference"
     return None
 
+
 def rclone_copy_file(upload_file_path: str, rclone_remote_name: str, folder_name=None, **kwargs):
     """Copies a file from a location locally to a given remote. Assumes folder of folder_name is already created
 
@@ -40,4 +41,14 @@ def rclone_copy_file(upload_file_path: str, rclone_remote_name: str, folder_name
 
     rclone.copy(upload_file_path, rclone_full_remote)
 
+
+def rclone_init_dir(folder_name: str, rclone_remote_name: str):
+    """TODO: MISSING DOCSTRING
+
+    Args:
+        dirname (str): _description_
+        rclone_remote_name (str): _description_
+    """
+
+    rclone.mkdir(folder_name, rclone_remote_name)
 
