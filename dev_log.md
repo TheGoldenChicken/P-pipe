@@ -572,3 +572,37 @@ TODO: Currently missing functionality
 - Should work this first working version into the transaction scheduler, just so we can say we have done it.
 
 Overall, this is good progress, we have used $36\%$ of our time, and yet the first-ish version is already complete. That is nice. 
+
+
+# 03/11/2025
+
+Started working on the transaction scheduler as planned, it occured to me, that whenever I had the backend running in the background, the scheduler was actually running as well (I never turned it off in `.env`). Does this mean it just worked? Partly yes! When pushing to drive, there were no issues, but then immediately afterwards, when pushing to AWS, it ran into issues, simply because it cannot create the folder first. 'No problems' I thought, that should just return an error.
+
+But the tokio loop silently terminates when an error is returned. I had no idea of this. The fix appears simple enough, handle the error, and use `continue`. I'll try that.
+
+The problem really was that the error was propagated by `?`, which meant it went to tokio instead of being handled inside of the function. An error in tokio means the thread terminates.
+
+There were some minor hiccups (forgot to await on the transaction scheduler running). Also forgot `async move` Previously, it was this:
+
+```rust
+tokio::spawn(transaction_scheduler(pool.clone()));
+```
+
+Which, I'm not entirely sure of, but I can only think that it didn't properly spawn a new async thread. 
+
+Briefly considered (and also did), order transactions returned by `transaction_scheduler` by `scheduled_time`, that way, we can add functionality to just always have transactions at `scheduled_time`$=0$ be those that create folders.
+
+But now, I'm thinking that it's way easier to do simply add it to create_challenges. Or as a sub-part of that. Something that runs as a kind of if-statement. Either that, or we're gonna have to add another table for kinda `auxilliary requests` on top of the `judgement requests` table we already have to add...
+
+
+# 04/11/2025
+
+So I guess I got lost in the sauce, because while I was implementing a `rclone_make_dirs` function, I tested the regular `rclone copy` with s3, and it works... without any issues. Weird.
+
+Spent like an hour trying to find the issue, before I realized, I'd silently changed underscores to not exist. So underscores were still being passed from Rust to the orchestrator, which was making S3 pushes fail when done from Rust, but not from the terminal. Jesus. Making a dead-simple sanitizer script fixed this rather minor, but supremely annoying issue...
+
+Fucked around some with adding a functionality for the script to remove completed transactions from transactions and add them to completed_transactions.
+
+The whole thing appears to work as it should now... So the testing begins.
+
+Next time, gonna have to split up dispatcher.rs into more manageble pieces, right now, it's pretty bigg
