@@ -61,9 +61,12 @@ pub async fn add_challenge(
     get_challenges(db).await
 }
 
+// TODO: Consider if makes sense to have db be anything that implements sqlx::Executor<'c, Database=sqlx::Postgres>
+// Tested in integration tests, not unittests!
 // TODO IMPORTANT: Really have a good dig into this one, will fail regularly if we don't find a better way of structuring it, and we'll have no idea why it fails...
-async fn add_transactions_into_db(
-    db: &mut Connection<Db>,
+pub async fn add_transactions_into_db(
+    // db: &mut Connection<Db>,
+    db: &mut sqlx::PgConnection,
     transactions: &[Transaction],
 ) -> Result<u64, Custom<String>> {
     if transactions.is_empty() {
@@ -114,7 +117,7 @@ async fn add_transactions_into_db(
     }
 
     let affected = sqlx::query_with(&query, args)
-        .execute(&mut ***db)
+        .execute(db)
         .await
         .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?
         .rows_affected();
@@ -220,11 +223,152 @@ pub async fn delete_challenge(mut db: Connection<Db>, id: i32) -> Result<Status,
 }
 
 #[delete("/api/challenges")]
-pub async fn destroy_challenges(mut db: Connection<Db>) -> Result<(), Custom<String>> {
+pub async fn destroy_challenges(mut db: Connection<Db>) -> Result<Status, Custom<String>> {
     sqlx::query!("DELETE FROM challenges")
         .execute(&mut **db)
         .await
         .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
 
-    Ok(())
+    Ok(Status::NoContent)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::testing_common::instances::{
+        challenge_instance, transactions_expected_from_challenge_instance,
+    };
+    use proptest::prelude::*;
+
+    #[test]
+    fn test_transactions_from_challenge_basic() {
+        let challenge = challenge_instance(); // 3 release proportions
+
+        let transactions = transactions_from_challenge(challenge)
+            .expect("Could not generate transactions from challenge!");
+
+        assert_eq!(
+            transactions.len(),
+            3,
+            "Expected 3 transactions, got {}",
+            transactions.len()
+        );
+    }
+
+    #[test]
+    fn test_transactions_created_correctly() {
+        let challenge = challenge_instance();
+        let created_transactions = transactions_from_challenge(challenge)
+            .expect("Could not generate transactions from challenge!");
+        let expected_transactions = transactions_expected_from_challenge_instance();
+
+        assert_eq!(
+            created_transactions, expected_transactions,
+            "Expected created transactions to match expected transactions!"
+        )
+    }
+
+    proptest! {
+        #[test]
+        fn total_rows_pushed_equals_init_dataset_rows(
+            proportions in prop::collection::vec(0.0..1.0, 1..10),
+            init_rows in 50..2000i32
+        ) {
+
+            // Normalize proportions so they sum to 1.0
+            let total: f64 = proportions.iter().sum();
+            let normalized: Vec<f64> = if total == 0.0 {
+                vec![1.0] // fallback to avoid division by zero
+            } else {
+                proportions.iter().map(|p| p / total).collect()
+            };
+
+            let challenge = Challenge {
+                id: Some(1),
+                challenge_name: "test".into(),
+                created_at: None,
+                init_dataset_location: "s3://bucket/data.csv".into(),
+                init_dataset_rows: init_rows,
+                init_dataset_name: None,
+                init_dataset_description: None,
+                dispatches_to: vec![DispatchTarget::S3],
+                time_of_first_release: 0,
+                release_proportions: normalized.clone(),
+                time_between_releases: 1,
+                access_bindings: None,
+            };
+
+            let transactions = transactions_from_challenge(challenge)
+                .expect("Could not generate transactions from challenge");
+
+            // Sum up all rows pushed
+            let total_rows: i32 = transactions.iter()
+                .map(|t| {
+                    let rows = t.rows_to_push.as_ref().expect("rows_to_push missing");
+                    rows[1] - rows[0]
+                })
+                .sum();
+
+            // Assert that the sum equals init_dataset_rows
+            prop_assert_eq!(
+                total_rows,
+                init_rows,
+                "Expected total rows to equal {}, got {}",
+                init_rows,
+                total_rows
+            );
+        }
+    }
+
+    // Wish I could be without this, but it also lets me iterate over them...
+    use proptest::sample::subsequence;
+    use strum::{EnumCount, IntoEnumIterator};
+    // const DISPATCH_TARGET_COUNT: u64 = 3;
+
+    fn subset_strategy() -> impl Strategy<Value = Vec<DispatchTarget>> {
+        let all = DispatchTarget::iter().collect::<Vec<DispatchTarget>>();
+        subsequence(all, 1..=DispatchTarget::COUNT)
+    }
+
+    proptest! {
+        #[test]
+        fn multiple_dispatch_trans_between_minmax(
+            proportions in prop::collection::vec(0.0..1.0, 1..10),
+            dispatch_locations in subset_strategy()
+        ) {
+
+        let expected_min_transactions = proportions.len();
+        let expected_max_transactions = expected_min_transactions * dispatch_locations.len();
+
+        println!("{:?}", proportions.clone());
+        println!("{:?}", dispatch_locations.clone());
+
+        let challenge = Challenge {
+            id: Some(1),
+            challenge_name: "testingchallenge1".into(),
+            created_at: None,
+            init_dataset_location: "s3://bucket/data.csv".into(),
+            init_dataset_rows: 300,
+            init_dataset_name: None,
+            init_dataset_description: None,
+            dispatches_to: dispatch_locations,
+            time_of_first_release: 1000,
+            release_proportions: proportions,
+            time_between_releases: 60,
+            access_bindings: None
+        };
+
+        let transactions = transactions_from_challenge(challenge)
+        .expect("Could not generate transactions!");
+
+        prop_assert!(
+                    transactions.len() >= expected_min_transactions &&
+                    transactions.len() <= expected_max_transactions,
+                    "Expected number of generated transactions between min ({}) and max ({}), got: {}",
+                    expected_min_transactions,
+                    expected_max_transactions,
+                    transactions.len()
+                );
+        }
+    }
 }
