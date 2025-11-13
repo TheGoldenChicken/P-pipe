@@ -22,3 +22,22 @@ pub struct Challenge {
 
     pub access_bindings: Option<Json<Vec<AccessBinding>>>,
 }
+
+impl Default for Challenge {
+    fn default() -> Self {
+        Challenge {
+            id: None,
+            challenge_name: "default-challenge".to_string(),
+            created_at: None,
+            init_dataset_location: "s3://bucket/default.csv".to_string(),
+            init_dataset_rows: 100,
+            init_dataset_name: None,
+            init_dataset_description: None,
+            dispatches_to: vec![DispatchTarget::S3],
+            time_of_first_release: chrono::Utc::now().timestamp(),
+            release_proportions: vec![1.0],
+            time_between_releases: 1000, // 1 day in seconds
+            access_bindings: None,
+        }
+    }
+}
