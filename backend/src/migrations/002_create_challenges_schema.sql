@@ -1,5 +1,3 @@
-CREATE TYPE dispatch_target AS ENUM ('s3', 'drive');
-
 CREATE TABLE IF NOT EXISTS challenges (
     -- Bookkeeping fields
     id SERIAL PRIMARY KEY,
