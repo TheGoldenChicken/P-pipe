@@ -606,3 +606,37 @@ Fucked around some with adding a functionality for the script to remove complete
 The whole thing appears to work as it should now... So the testing begins.
 
 Next time, gonna have to split up dispatcher.rs into more manageble pieces, right now, it's pretty bigg
+
+# 9-10/11/2025
+
+Wrote some simple integration tests for the challenges. No biggie there. 
+
+Then, ran into a big problem; testing transactions being added... No fucking way I'm doing the old thing of creating a long list of valid transactions, and then testing if the output matches the input. Very brittle, very stupid.
+
+Proptesting is obvious... Thought first about what I wanted to proptest, and then thought that I could just test stuff like: "If a challenge has this many release_proportions, will it correctly upload transactions to the database?". Makes sense, and can be expanded to a bunch of other shenanigans... Started doing it, then ran into the problem that proptest!{} does not work with async. Fuck. Tried doing a block_on, with tokio, but didn't work, that fucked with the underlying sqlx async runtime, leading to a panic (not from sqlx, mind you, from the underlying Rust runtime). Tried both `proptest-async` and `test-strategy`, the latter of which touts a macro, kinda like proptest, [that works with async](https://docs.rs/test-strategy/latest/test_strategy/#proptestasync--). Problem is, any argument "passed" (are property-based arguments *passed* to a function?), needs to implement the `arbitrary` trait, which `PgConnectOptions` and `PgPoolOptions` does not. No fucking way I'm doing that, phat chance.
+
+Final thoughts then, are that proptesting while doing integration testing may be stupid...
+
+Therefore, came to my senses and came up with the idea that **integration tests should only test, what concerns the integration itself** (quote me). Meaning, the ability to create a bunch of logical transactions from a single challenge - "WGAS?". The integration test should only be the last part: "Can we conncet to the db, and upload said transactions to it?". Meaning, we basically only need to test the `add_transactions_into_db` function's ability to execute and add what it has, which is technically in `challenges.rs`. We can make it somewhat robust, by having a set challenge, creating the transactions using the regular function, and then the test criteria is being able to deserialize the postgres transactions to sane and working rust transactions. That should do it. Everything else, we can get in unit tests and proptests. Meaning the ability to not go above 1, the ability to create $n$ transactions for $n$ `release_proportions`, etc., we'll figure that out when we get there. 
+
+Next time, therefore, we write some unit tests for transactions, and then a dead-simple integration test for the test.
+
+Today's lesson: Tests should be simple; INTEGRATION TESTS SHOULD BE SIMPLERERERE!
+
+I can already imagine myself writing 'E2E tests should be simplesssssssst' in the near future. Let's wait and see.
+
+Also, found some good material on [advanced rust testing, particularly in databases](https://rust-exercises.com/advanced-testing/06_database_isolation/01_sqlx_test.html), should read it given the time.
+
+# 14/11/2025
+
+Worked on aforementioned integration tests and proptests for backend in Rust. Started out creating unittests in `challenges.rs`, mostly focused on proptesting `transactions_from_challenge` and `add_transactions_to_db`. The latter I had to do integration tests for, but the former I could do with proptesting to test various things.
+
+I ended up also making some integration tests for transactions, for GET, DESTROY, DELETE... All pass except GET, which fails roughly 50% of the time. I don't know why exactly, but I suspect it is because of the transaction scheduler, I don't know though, will have to test more. 
+
+Now I just need to add testing to the Python part (I'll probably wait with E2E testing, though), and I'll be done with the first release. Next milestone will then be either:
+
+- Judgement module
+- Multimodal data support
+- Active Learning support
+
+I'll probably make estimates for what all three will require and take it from there. For now, we're in a pretty good spot.
