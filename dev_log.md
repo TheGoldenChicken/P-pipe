@@ -640,3 +640,45 @@ Now I just need to add testing to the Python part (I'll probably wait with E2E t
 - Active Learning support
 
 I'll probably make estimates for what all three will require and take it from there. For now, we're in a pretty good spot.
+
+
+# 18/11/2025
+
+- Made small fix to rust tests, made is so `scheduler_fairing` is only attached if there is not a test running. Imagine I can manually attach the scheduler fairing in the case I need to test it.
+  - Reminds me: **I should test the scheduler**
+- Wrote rust 'script' which saves rust instances from `testing_common/instances.rs` to .json files so Python can load them in a more genuine manner
+- Wrote some tests for `py_modules/orchestrator.py` - Ensures it works for both drive and s3
+- Didn't clean it up
+- Knocked out the 'decide on common test directory'-issue. Just treated `py_modules` as a module that `py_modules/tests` can import from... So far works, but it might fuck with debugger or running from vs_code, guess I'll see, didn't check it
+- Removed 'graveyard', as there was some old pytests in there that were fucking up the test results whenever I ran `pytest`.
+- Decided on using a parameterizered fairing to run tests for multiple cases of dispatcher (s3, drive, etc.)
+  - Needed to manually make these difference transaction instances with both s3 and drive, might need to change this in the aforementioned `save_instances.rs`
+- Found the difference between `rclone-python.purge` and `rclone-python.delete`, the former deletes ALL including the folder it created, the latter just deletes the content
+- Found out that `rclone-python.rclone.purge` just deletes drive files, they're still in my trash... This **might** create problems in the future, for now I dunno...
+
+## Judgement Module
+
+Module kinda like current `transactions.rs` and `challenges.rs`, should handle sending requests to students, asking them to confirm data points or make requests for inference.
+
+### MVP points:
+
+- Extra table and schema for requests that hold information on what students should "give" in regards to data. 
+- Endpoint for students to find all relevant requests for them
+- Endpoint or other method for students to submit answers for requests
+- Integration with scheduler to automatically send or make available the requests at their allotted time
+- 
+
+### Extra points
+
+- Security for endpoints to ensure students can call requests endpoints, but not challenges and transactions endpoints
+- Way for students to upload answers to batch predictions
+- Easy way for students to set up their own endpoint server to flip the script for batch predictions
+
+### Requires
+1. Making Rust schema for requests
+2. Making postgres table for requests
+3. Making admin endpoints for requests: GET, POST, DELETE, PUT
+4. Making user endpoints for endpoints: GET, POST
+ Implementing 4ish endpoints 
+
+
