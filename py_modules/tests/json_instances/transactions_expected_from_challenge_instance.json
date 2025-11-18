@@ -1,0 +1,83 @@
+[
+  {
+    "id": null,
+    "challenge_id": 42,
+    "created_at": null,
+    "scheduled_time": 1000,
+    "source_data_location": "s3://bucket/data.csv",
+    "dispatch_location": "S3",
+    "data_intended_location": "challenge_42_testingchallenge1",
+    "data_intended_name": "release_0",
+    "rows_to_push": [
+      0,
+      90
+    ],
+    "access_bindings": [
+      {
+        "type": "S3",
+        "identity": "ec2userstuff",
+        "bucket": "somebucket"
+      },
+      {
+        "type": "Drive",
+        "identity": "dderpson99@gmail.com",
+        "folder_id": "abcd123",
+        "user_permissions": "Read"
+      }
+    ]
+  },
+  {
+    "id": null,
+    "challenge_id": 42,
+    "created_at": null,
+    "scheduled_time": 1060,
+    "source_data_location": "s3://bucket/data.csv",
+    "dispatch_location": "S3",
+    "data_intended_location": "challenge_42_testingchallenge1",
+    "data_intended_name": "release_1",
+    "rows_to_push": [
+      90,
+      210
+    ],
+    "access_bindings": [
+      {
+        "type": "S3",
+        "identity": "ec2userstuff",
+        "bucket": "somebucket"
+      },
+      {
+        "type": "Drive",
+        "identity": "dderpson99@gmail.com",
+        "folder_id": "abcd123",
+        "user_permissions": "Read"
+      }
+    ]
+  },
+  {
+    "id": null,
+    "challenge_id": 42,
+    "created_at": null,
+    "scheduled_time": 1120,
+    "source_data_location": "s3://bucket/data.csv",
+    "dispatch_location": "S3",
+    "data_intended_location": "challenge_42_testingchallenge1",
+    "data_intended_name": "release_2",
+    "rows_to_push": [
+      210,
+      300
+    ],
+    "access_bindings": [
+      {
+        "type": "S3",
+        "identity": "ec2userstuff",
+        "bucket": "somebucket"
+      },
+      {
+        "type": "Drive",
+        "identity": "dderpson99@gmail.com",
+        "folder_id": "abcd123",
+        "user_permissions": "Read"
+      }
+    ]
+  }
+]

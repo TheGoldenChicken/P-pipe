@@ -1,7 +1,6 @@
 import click
 import json
-import rclone_functions
-
+import py_modules.rclone_functions as rclone_functions
 
 # TODO: Currently missing functionality
 # 1. Giving other users permission to drive and s3 buckets
@@ -65,7 +64,7 @@ def unpack_transaction_json(transaction: str):
 #     """
 
 
-def orchestrator(transaction_dict):
+def orchestrator(transaction_dict, local_folder_path=None):
     """TODO: MISSING DOCSTRING
 
     Args:
@@ -91,7 +90,8 @@ def orchestrator(transaction_dict):
 
     data_intended_location = transaction_dict['data_intended_location']
     import os
-    local_folder_path = os.path.join("transaction_releases", data_intended_location)
+    if local_folder_path is None:
+        local_folder_path = os.path.join("transaction_releases", data_intended_location)
     os.makedirs(local_folder_path, exist_ok=True)
 
     data_intended_name = transaction_dict['data_intended_name']

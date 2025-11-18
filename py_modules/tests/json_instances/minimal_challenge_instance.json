@@ -1,0 +1,20 @@
+{
+  "id": null,
+  "challenge_name": "testingchallenge1",
+  "created_at": null,
+  "init_dataset_location": "s3://bucket/data.csv",
+  "init_dataset_rows": 300,
+  "init_dataset_name": null,
+  "init_dataset_description": null,
+  "dispatches_to": [
+    "S3"
+  ],
+  "time_of_first_release": 1000,
+  "release_proportions": [
+    0.3,
+    0.4,
+    0.3
+  ],
+  "time_between_releases": 60,
+  "access_bindings": null
+}
