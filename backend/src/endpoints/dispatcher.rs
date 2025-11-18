@@ -30,12 +30,14 @@ pub fn rocket_from_config(figment: Figment) -> Rocket<Build> {
     let attach_scheduler = env::var("ATTACH_SCHEDULER")
         .map(|v| v == "true")
         .unwrap_or(false);
-
-    if attach_scheduler {
+    
+    // attaching a scheduler during testing usually breaks the testing process
+    // TODO: Find a new way of attaching the scheduler fairing when running tests...
+    if cfg!(not(test)) && attach_scheduler {
         println!("Attaching scheduler fairing");
         rocket_build.attach(scheduler_fairing())
     } else {
-        eprintln!("ATTACH_SCHEDULER either false or not set, no scheduler fairing attached");
+        eprintln!("ATTACH_SCHEDULER either false, not set, or this is a test. No scheduler fairing attached");
         rocket_build
     }
 }
