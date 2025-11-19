@@ -14,7 +14,6 @@ async fn process_transaction(tx: &Transaction) -> Result<std::process::Output, C
     let script_path = Path::new("../py_modules/orchestrator.py");
 
     println!("Processing transaction!");
-    // TODO: Remove expect here - Should have proper error handling
     let transaction_string = serde_json::to_string(&tx)
         .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
 

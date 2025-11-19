@@ -677,8 +677,68 @@ Module kinda like current `transactions.rs` and `challenges.rs`, should handle s
 ### Requires
 1. Making Rust schema for requests
 2. Making postgres table for requests
+   1. Possibly making postgres table for request answers
+   2. Possibly also making postgres table for completed requests
 3. Making admin endpoints for requests: GET, POST, DELETE, PUT
 4. Making user endpoints for endpoints: GET, POST
- Implementing 4ish endpoints 
+ Implementing 4ish endpoints
+5. Making Python script to evaluate user POSTs or scheduled read from requests 
+    1. Possibly making possible to download files from certain folders
+    2. Keep track of statistics like time-to-completion or correctedness of answers.
 
 
+## Multimodal data support
+
+Expand current .csv file support to allow for multiple different files. Current idea is one .csv file, where each row has an extra column that points to other files, most likely images.
+
+### MVP Points
+
+- Users should either be able to specify, or the program should automatically detect a "multimodal data"-column indicator thingy
+- When detected as existing, each data fraction upload should also include all relevant "extra" data, that is the images and whatnot.
+- 
+
+### Extra points:
+
+- Intentional corruption of data should be able to affect the multimodalities of the data, so filters on images and whatnot.
+- If Judgement is implemented with requests, should also be able to request the multimodal data
+- If active learning is implemented, users should also be able to implement the multimodal data
+
+### Requires
+
+1. Deciding on whether we should change the challenges schema to allow for a "multimodal" column specification, or whether we should just go with a standard column name for multimodal data.
+   1. Likely better with the former, as we can more easily expand this to include multiple sources of multimodal data.
+2. Changing the challenges schema in all sources (including unit-tests and whatnot), to include new mulitmodal data column name
+3. Change transactions schema in all sources (including unit tests) to include new multimodal data column name (cannot reference challenges, transactions must be 'atomic')
+4. Change functions such as `create_transactions_from_challenge` to include multimodal data
+5. Change `upload_with_rclone` and possibly `orchestrator` in `py_modules` to account for multimodal data.
+6. Writing new integration tests that ensure the multimodal data is pushed as it should
+
+## Active learning module
+
+Implement previously discussed possibility for user to request access to certain parts of data, y-values, certain columns, etc. Given that it requires students to interface with the API, there may be some overlap with the judgement module... 
+
+### MVP Points:
+
+- Include possibility in challenges to specify 'extra' columns, that are not pushed except if explicitly requested
+  - Also include possibility to specify cost of these points
+- Include field in challenges that tracks 'resources' used by students
+- Have endpoints for students to request the extra data
+
+### Extra Points:
+
+- Allow for cost of data points to be dynamic depending on class or similar
+
+
+### Requires:
+
+1. Changing transactions to include fields that specify which columns to push or which *not* to push
+2. Changing `py_modules` to only push fields as specified by new transaction fields
+3. Creating relevant endpoints, GET, POST, etc for students to use
+4. Create a special flavor of transactions, or change transactions to only push requested columns
+5. Creating integration and unit tests for the whole thing
+
+
+## Decision
+- Likely start with multimodality, seems easiest and most juice for the squeeze
+- Then go on with judgement
+- Then finally active learning (seems difficult and not muchg ain from it...)
