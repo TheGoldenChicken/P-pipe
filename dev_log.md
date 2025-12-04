@@ -783,3 +783,79 @@ A lot of the explanation now seems to focused around "this tool or that tool", w
 Finally, Nicki suggested making the judgement module over the multimodal data support. His argument being that it will more than the other parts, "finish" the program. Moreover, feedback is pretty important. I overall agree, and then again, it doesn't seem like ALL that much work to implement it. I've made the subtasks as Github issues, and right now, it seeems like more of the same, so we just have to add an extra two tables, with Rust schemas, some endpoints, and some additions to the automatic scheduler.
 
 I decided that students will answer requests for data and predictions by way of calling a PUT endpoint. This way, they can just upload their answer as an attached .json, which the server can validate in a minimal way. In the same manner, the PUT endpoint can be made so the request is automatically scheduled to be validated, moved to completed_requests, etc. 
+
+# 04/12/2025
+
+Started work on judgement module, meaning issues 57-60. Simply made one table meant to hold requests, and have a second "on standby" for completed_requests. 
+
+Had a bit of back-and-forth with myself and copilot, about the best way to structure asks for requests (repqest_payload) and the general structure expected of users for the request response (expected_response)... jsonB needs to serialize into a specific Rust type, so I had to make a type for that. However, if it is a jsonB, that is a struct in Rust, it *cannot* be an enum in Postgres, meaning we lose some validation on the side of Postgres, but I think that is worth doing still.
+
+Ended up creating a `RequestType` enum that is one of three "payload" structs: `DataValidation`, `BatchPrediction`, and `CalculatedFeature`. I figured the following:
+
+In general, data points should be expected in like a json-type format, ala
+
+```
+type_of_request: {
+    Type: "BatchPrediction", <- Automatically assigned during serializing
+    "items": [
+        {
+            "col1": 69,
+            "col2": "Value string",
+            "col3": False
+        }
+        {
+            ....
+        }
+    ],
+    "count": 3
+}
+```
+
+- DataValidation:
+Payload (items) is a vector of ints: `[2, 6, 42, 59, 69]`, which is just the data points that need to be returned
+Expected response is a `BatchPrediction`-type response (reused for now, but might need to make cursory differences between them)
+
+- BatchPrediction
+Payload (items) is as `BatchPrediction`
+Expected response is probably like `DataValidationPayload`, although this only supports integer predictions, so might need to make a specific one that has, like:
+
+```
+expected_response: {
+    Type: "PredictionRespnose",
+    "items": [
+        {
+            "row":, 69,
+            "prediction": 55,
+            "prediction_2": False,
+            "prediction_3": "Derpherp derp derp derp"
+        }
+        {
+            ....
+        }
+    ],
+    "count": 3
+}
+```
+
+- Calculated Feature
+Payload is either like payo (if we assume they have already recieved data), or explicitly like BatchPrediction, if we wanna help them along... In either case, it should contain two additional values: `feature_name`, so they know how to submit it, and `feature_information` so they know how to calculate it.
+Expected response probably like Batch prediction, as long as it contains the specific new columns, we don't really care about what extra columns they submit...
+
+
+Initially, I wanted to have two different columns for requests, one for the request type and one for the payload. In either case, the request type would be an enum in Rust, and request_payload could not be an enum in Postgres (since it should be a struct in Rust). request_type can be implicitly contained in request payload, so we didn't really need to include that.
+
+Made simple endpoints for GET requests, POST, DELETE, DESTROY requests, really much easier when we have made it the first time... Only issues came from aforementioned differences between `DbJson` and "Serde" `Json` - easily fixed.
+
+Need to add some type of validation when submitting a request so they don't submit shid requests
+
+Next time, will start work on more user-facing endpoints, that should only be able to return requests for one's specific challenge and whatnot. At this point, we might wanna consider adding UUIDs to challenges, otherwise people pirating each other's requests and POSTs will be a real issue (integer IDs are easy to figure out).
+
+Need to remember to add warning in report that allowing users to upload jsons is a security risk, SQL injection and whatnot. Don't know if there is a real risk, but then again, I'm not a security expert...
+
+Also need to complete implementation for CompletedRequest, both Database-side and Rust-side.
+
+We also briefly considered, that we need to standardize plural vs singular definitions in our code. Sometimes its called "challengeS", other times "challenge", same for "requestS" vs "request", etc. Minor thing, but really annoying, especially if you come from the outside and are not me...
+
+Finally, considered  if it made sense to give like an API to students to make it easier to interface with the specifics of the platform, so they won't have to spend time structuring their pandas arrays and such in the specific json formats... that is kind of a foregone conclusion (does that make sense even?). Could also include basic functionality to connect to, and send the endpoint requests... though that might also just be a simple iteration on: "read the fucking documentation for whatever fastAPI-clone you wanna make, probably just use requests, dummy!"
+
+Only other thing to consider with requests, is we have to use an enum to control what *types* are accepted in the submitted jsons (which are seen as `Hashmaps<String, Serde::Value>)` in Rust.
