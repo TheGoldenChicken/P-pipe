@@ -763,9 +763,11 @@ Had a meeting with Nicki, mostly about report structure. In general, it will fol
   - Primer: Overall tools used
   - 'Ramble' about tool choices dependent on experience rather than merit
   - Development of, and choices made in various versions
+
 - Discussion / Possible improvements
   - What could be done differently?
   - Did very structured way of working make sense?
+
 - Conclusion
 - References
 - Appendix
