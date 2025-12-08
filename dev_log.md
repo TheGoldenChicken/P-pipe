@@ -882,3 +882,36 @@ We somewhat finished making the PUT, first does some checking to see if the `res
 Anyways, then we are suposed to run some Python code to validate the data itself... We could possibly do this in Rust, after all, the comparisons are rather simple, but in the case of partial comparisons, within bounds and such, I'd rather we isolate that to Python, as we usually do, it is the domain of data... **One downside of this**, is that the `RequestStatus`, which will be determined from this Python script, will have to be... returned from the Python script, meaning we must somehow be able to return this from the CLI, which we have mentioned before, is cancer. We'll have to find some holistic way of doing this... parsing strings perhaps? After all, we can kinda limit what comes out into the `stout` of the Python process pretty heavily. Either that, or we can keep it in `stderr` as information, potentially having it be even closer managed. Or perhaps (don't know if this is possible), we can do it simply through the CLI itself... perhaps Click has something...
 
 Anyways, after that, we create the `CompletedRequest` (which we also implemented, and had minor problems with `RequestStatus` not being `Option<T>` in Rust, but being optional on the db). Finally insert this into the `completed_requests` in database, and at the same time, delete the entry from `requests`... This last part I say "at the same time", because it actually was pretty simple to make transactions work in sqlx, so that it won't execute either transaction unless both succeed. I should probably use this for transactions as well... A shame it took me so long to figure out that it is dog-easy to make it work.  
+
+
+# 08/12/2025
+
+Did work on the report and the judgement module... 
+
+Report-wise, started writing on MLOps. Might have to write on ML in general beforehand. Had some formulation problems, because I really wanna specify the importance of MLOps, especially in the in the context of what Nicki likes to say: Programming is *our* (as ML engineers) laboratory, but that ultimately came off as rant-y. If anything, I think it makes more senes to reserve it for kind of a "why MLOps?" subsection... potentially not include it all. *If* it really only is methodology, we shouldn't really care about the *why* of MLOps, and mostly just about the *what*.
+
+Overall, getting kinda stresssed (again) about the report, since I only have 42-ish percent of the entire time left. Probably shouldn't really stress, but stiiiiilll.
+
+Went on to working on the judgement module. Overall, went pretty smoothly. The entirety of the important python part could almost be vibe-coded (hate that word). In regards to the CLI for it, tried to follow the example set by `orchestrator.py` as much as possible, though it occured to me that I have no `ochestrator_cli.py`... should maybe do that.
+
+Also found out two things:
+
+1. You can make enums in Python (cool)
+2. You can manually specify exit codes in python (wooow)
+
+The second point is most interesting, Python generally considers anything that is not a 0 some kind of error. 1 is typically syntax errors, 2 are usage errors, and the rest are various types of general errors, specified by the individual program. I figured, I could use this as a semi-robust way to pass information on what the result is. I opted for 0: Correct, 1 and 2 unused to make way for regular Python errors, and then the rest like `PARTIAL_CORRECT`, `INCORRECT`, etc. set on the remaining errors. 
+Granted, this robustness is kind of lost when I then fail the function if I can't deserialize the `judgement_message`... but that's another story, I can remove that nazi deserialization policy. On a side-note, I also opted to require each part of a `BatchPrediction` or `DataValidation` response to include a `row` field, as otherwise the comparison would be a total shitshow to figure out... Not nice, this is a small requirement for students I think, and totally reasonable.
+
+Finally, also added the aforementioned `judgement_message` to the output which is essentially just data on how many errors there were, what kinds, etc. Intended to give the student more detailed feedback on where they fucked up. Added it as a `sqlx::types::Json<rocket::serde::json::Value>`. Didn't wanna create a specific type for it yet (plus it isn't too important that it follows a specific format), and mixing `rocket::serde` and `sqlx::types` in this manner makes it serialize up real nice, even though it doesn't really make that much sense. Also need to add tolerance to each request (potentially unseen by user), as given by the challenge specifications.
+
+Made a bunch of `launch.json` additions to kinda debug `judge_cli.py`, seems to work the way it should.
+
+Did cursory tests of all endpoints using Postman... stuff looks good so far. Also added minor endpoints to GET, DELETE, DESTROY all completed requests and whatnot. There is a minor issue right now, where the id is reset when going from request -> completed_request. Meaning if we have request.id = 5, and make completed_request from it, it is set to the current serial value of completed_request. Kind of an issue, since we cannot logically connect requests to completed_requests now, but that'll sort itself out if and when we switch to using UUID's, since no chance these'll be inferred automatically (they might actually be, but we need to we aware of this!).
+
+Next time, gonna work on automatically creating requests, either all the time (random time periods between), or easier, specifically with each transaction. In this, it also makes sense to include options for these in the challenges themselves. This might be the time to take care of [github issue #61](https://github.com/TheGoldenChicken/P-pipe/issues/61), adding a potential json column to challenges to control how requests, transactions, and so on, are made automatically by the scheduler.
+
+Easiest, and most minimal implementation might be just to add a few `DataValidation` requests for each transaction created, do this, then create tests, **and then** take care of issue #61. Then we can have #61 as a whole new feature potentially... This might also make sense for the future implementation writing abouts, letting us create essentially a whole new chapter on that. Nice
+
+Sent the questionaire to S/M-KID, gotten like 17 more answers, nice. Would like around 100, tho. Made some questions for potential qualitative interview for engineers and professors, will execute them if and when I have the time.
+
+Finally, obviously also need to clean up all files, run `rustfmt` and allat, will do that when the feature release rolls around...
