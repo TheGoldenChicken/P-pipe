@@ -149,39 +149,39 @@ if __name__ == "__main__":
     cli()
     # orchestrator_cli()
 
-    example_input = {
-        "id": 1,
-        "challenge_id": 1,
-        "created_at": 1761920926,
-        "scheduled_time": 5000,
-        "source_data_location": "/home/cicero/ppipe/py_modules/tests/test_data/iris.csv",
-        "dispatch_location": "S3",
-        "data_intended_location": "challenge_1_testingchallenge1",
-        "data_intended_name": "release_0",
-        "rows_to_push": [
-            0,
-            150
-        ],
-        "access_bindings": [
-            {
-                "type": "S3",
-                "identity": "arn:aws:iam::123456789012:user/alice",
-                "bucket": "ml-challenges"
-            },
-            {
-                "type": "Drive",
-                "identity": "user:bob@example.com",
-                "folder_id": "abc123",
-                "user_permissions": "editor"
-            },
-            {
-                "type": "Drive",
-                "identity": "user:carol@example.com",
-                "folder_id": None,
-                "user_permissions": "viewer"
-            }
-        ]
-    }
+    # example_input = {
+    #     "id": 1,
+    #     "challenge_id": 1,
+    #     "created_at": 1761920926,
+    #     "scheduled_time": 5000,
+    #     "source_data_location": "/home/cicero/ppipe/py_modules/tests/test_data/iris.csv",
+    #     "dispatch_location": "S3",
+    #     "data_intended_location": "challenge_1_testingchallenge1",
+    #     "data_intended_name": "release_0",
+    #     "rows_to_push": [
+    #         0,
+    #         150
+    #     ],
+    #     "access_bindings": [
+    #         {
+    #             "type": "S3",
+    #             "identity": "arn:aws:iam::123456789012:user/alice",
+    #             "bucket": "ml-challenges"
+    #         },
+    #         {
+    #             "type": "Drive",
+    #             "identity": "user:bob@example.com",
+    #             "folder_id": "abc123",
+    #             "user_permissions": "editor"
+    #         },
+    #         {
+    #             "type": "Drive",
+    #             "identity": "user:carol@example.com",
+    #             "folder_id": None,
+    #             "user_permissions": "viewer"
+    #         }
+    #     ]
+    # }
 
 
 # test with
