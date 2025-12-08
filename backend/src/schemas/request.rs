@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::fmt;
 use rocket::serde::{Deserialize, Serialize};
 use sqlx::types::Json;
+use rocket::serde::json::Value;
 
 // TODO: Potentially add ColumnValue enum to control "accepted" types in requests...
 
@@ -95,7 +96,8 @@ pub struct CompletedRequest {
 
     pub request_status: RequestStatus,
     pub submitted_at: Option<i64>,
-    pub submitted_response: Option<Json<RequestType>>
+    pub submitted_response: Option<Json<RequestType>>,
+    pub judgement_message: Option<Json<Value>>
 }
 
 impl CompletedRequest {
@@ -104,6 +106,7 @@ impl CompletedRequest {
         status: RequestStatus,
         submitted_at: Option<i64>,
         submitted_response: Json<RequestType>,
+        judgement_message: Option<Json<Value>>
     ) -> Self {
         CompletedRequest {
             id: req.id,
@@ -115,6 +118,7 @@ impl CompletedRequest {
             request_status: status,
             submitted_at: submitted_at,
             submitted_response: Some(submitted_response),
+            judgement_message,
         }
     }
 }
