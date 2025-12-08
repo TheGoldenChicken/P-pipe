@@ -7,6 +7,9 @@ use crate::schemas::common::Db;
 use crate::schemas::request::{Request, RequestType, CompletedRequest, RequestStatus};
 use std::mem::discriminant;
 use chrono::Utc;
+use std::process::Command;
+use std::path::Path;
+
 // For transactions!
 use sqlx::Acquire;
 
@@ -70,7 +73,7 @@ pub async fn add_request(
 }
 
 #[delete("/api/requests/<id>")]
-pub async fn delete_requests(mut db: Connection<Db>, id: i32) -> Result<Status, Custom<String>> {
+pub async fn delete_request(mut db: Connection<Db>, id: i32) -> Result<Status, Custom<String>> {
     sqlx::query!("DELETE FROM requests WHERE id = $1", id)
         .execute(&mut **db)
         .await
@@ -87,6 +90,56 @@ pub async fn destroy_requests(mut db: Connection<Db>) -> Result<(), Custom<Strin
         .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
     Ok(())
 }
+
+#[get("/api/completed_requests")]
+pub async fn get_completed_requests(
+    mut db: Connection<Db>,
+) -> Result<Json<Vec<CompletedRequest>>, Custom<String>> {
+    let completed_requests = sqlx::query_as!(
+        CompletedRequest,
+        r#"
+        SELECT
+            id,
+            challenge_id,
+            created_at,
+            type_of_request as "type_of_request: DbJson<RequestType>",
+            expected_response as "expected_response: DbJson<RequestType>",
+            deadline,
+            request_status as "request_status: RequestStatus",
+            submitted_at,
+            submitted_response as "submitted_response: DbJson<RequestType>",
+            judgement_message as "judgement_message: DbJson<Value>"
+        FROM 
+            completed_requests
+        "#
+    )
+    .fetch_all(&mut **db)
+    .await
+    .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
+
+    Ok(Json(completed_requests))
+}
+
+
+#[delete("/api/completed_requests/<id>")]
+pub async fn delete_completed_request(mut db: Connection<Db>, id: i32) -> Result<Status, Custom<String>> {
+    sqlx::query!("DELETE FROM completed_requests WHERE id = $1", id)
+        .execute(&mut **db)
+        .await
+        .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
+
+    Ok(Status::NoContent)
+}
+
+#[delete("/api/completed_requests")]
+pub async fn destroy_completed_requests(mut db: Connection<Db>) -> Result<(), Custom<String>> {
+    sqlx::query!("DELETE FROM completed_requests")
+        .execute(&mut **db)
+        .await
+        .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
+    Ok(())
+}
+
 
 // Student / User endpoints
 
@@ -118,12 +171,14 @@ pub async fn get_request_student(
 
     let number_requests = requests.len();
 
+    // TODO: Potentially add the TYPE of the expected response here as a help to the students...
     let response: Vec<Value> = requests.into_iter().map(|r| {
         json!({
             "request_id": r.id,
+            "challenge_id": r.challenge_id,
+            "type_of_request": r.type_of_request,
             "created_at": r.created_at,
             "deadline": r.deadline,
-            "type_of_request": r.type_of_request,
         })
     }).collect();
 
@@ -137,7 +192,7 @@ pub async fn get_request_student(
 
 // TODO: Could potentially also be done easier... just check if the RequestType of request matches RequestType of expected_response...
 // Potentially also add helper function to give information on how the response schema is supposed to be for a given request 
-fn check_request_type_match(
+fn _check_request_type_match(
     request: &RequestType,
     response: &RequestType
 ) -> Result<(), String> {
@@ -149,15 +204,14 @@ fn check_request_type_match(
     }
 }
 
-
 // Student answer request from their end:
 // 1. Validate that the json they have submitted fits with RequestType
 // 2. Select relevant request from id
 
-#[put("/api/requests/<_challenge_id>/<request_id>", data = "<response>")]
+#[put("/api/requests/<challenge_id>/<request_id>", data = "<response>")]
 pub async fn answer_request_student(
     mut db: Connection<Db>,
-    _challenge_id: i32,
+    challenge_id: i32,
     request_id: i32,
     // TODO: Potentially use Json<Value> and manually deserialize to return more... holistic error messages to users...
     response: Json<RequestType>
@@ -177,9 +231,10 @@ pub async fn answer_request_student(
         FROM 
             requests
         WHERE
-            id = $1
+            id = $1 AND challenge_id = $2
         "#,
-        &request_id
+        &request_id,
+        &challenge_id
     )
     .fetch_one(&mut **db)
     .await
@@ -189,20 +244,56 @@ pub async fn answer_request_student(
     // check_request_type_match(&*request.type_of_request, &*response)
     // TODO: Ensure the correct error is mapped here, it should be a user-fucked-up kind of error
     // .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
-    if discriminant(&request.expected_response.0) == discriminant(&response.0) {
+    if discriminant(&request.expected_response.0) != discriminant(&response.0) {
         return Err(
                 Custom(Status::NotAcceptable,
-                format!("Wrong response {} to request_type {}. ", *response, *request.type_of_request))
+                format!("Wrong response {} to request_type {}. Expected of type {}", *response, *request.type_of_request, *request.expected_response))
             )
     }
 
     // Assuming correct type is there, we go on to creating a CompletedRequest
-    let completed_request = CompletedRequest::from_request(request, RequestStatus::Pending, Some(submitted_at), DbJson(response.clone().into_inner()));
+    let completed_request = CompletedRequest::from_request(request, RequestStatus::Pending, Some(submitted_at), DbJson(response.clone().into_inner()), None);
 
-    // Here then goes logic to call python to see if Request is correct...
-    // ...
-    // ...
-    // That also gives value of what the RequestStatus should be...
+    let completed_request_string = serde_json::to_string(&completed_request)
+        .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
+
+    // TODO: Async this python bitch!
+    // TODO: Move these (should be constant variables) into places that make sense?
+    let python_path = Path::new("../.venv/bin/python");
+    let script_path = Path::new("../py_modules/judgement/judge_cli.py");
+
+    // TODO: Add catcher in case exit code is 1 or 2, in this case WE (not the student), fucked up in some way
+    let output = Command::new(python_path)
+        .arg(script_path)
+        .arg("--completed_request")
+        .arg(completed_request_string)
+        .output()
+        .map_err(|e| Custom(
+        Status::InternalServerError,
+        format!("Failed calling Python script with error {:?}", e),
+    ))?;  
+
+    let code = output.status.code().unwrap_or(-1);
+    let stdout = &String::from_utf8_lossy(&output.stdout);
+    
+    // TODO: remove Debug info here...
+    // println!("Exit code: {}, stdout: {}", code, stdout);
+    // let stderr = &String::from_utf8_lossy(&output.stderr);
+    // println!("Stderr {}", stderr);
+    
+    let parsed_stdout = serde_json::from_str::<Value>(&stdout)
+        .map_err(|e| Custom(
+            Status::InternalServerError,
+            format!("Failed to parse JSON from Python output: {:?}", e),
+        ))?;
+
+    let completed_request_status: RequestStatus = match code {
+        0 => RequestStatus::Correct,
+        4 => RequestStatus::PartialCorrect,
+        5 => RequestStatus::Incorrect,
+        _ => RequestStatus::SyntaxError, // Should never happen here, fr fr
+    };
+
     // We use transactions to prevent us from removing requests that don't go through
     let mut tx = db.begin()
         .await
@@ -218,8 +309,8 @@ pub async fn answer_request_student(
         CompletedRequest,
         r#"
         INSERT INTO completed_requests
-        (challenge_id, type_of_request, expected_response, deadline, request_status, submitted_at, submitted_response)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        (challenge_id, type_of_request, expected_response, deadline, request_status, submitted_at, submitted_response, judgement_message)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         RETURNING
             id,
             challenge_id,
@@ -229,15 +320,17 @@ pub async fn answer_request_student(
             deadline,
             request_status as "request_status: RequestStatus",
             submitted_at,
-            submitted_response as "submitted_response: DbJson<RequestType>"
+            submitted_response as "submitted_response: DbJson<RequestType>",
+            judgement_message as "judgement_message: DbJson<Value>"
         "#,
         completed_request.challenge_id,
         completed_request.type_of_request as _,
         completed_request.expected_response as _,
         completed_request.deadline,
-        completed_request.request_status as RequestStatus,
+        completed_request_status as RequestStatus,
         completed_request.submitted_at,
         completed_request.submitted_response as _, 
+        parsed_stdout,
     )
     .fetch_one(&mut *tx)
     .await
@@ -250,5 +343,3 @@ pub async fn answer_request_student(
     // Potentially return the full response they created if correct, and an error if it is not...
     Ok(Json(inserted))
 }
-
-// GET completed requests goes here! Both admin and user

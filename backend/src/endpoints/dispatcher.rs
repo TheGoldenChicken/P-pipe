@@ -9,7 +9,7 @@ use super::challenges::{add_challenge, delete_challenge, destroy_challenges, get
 use super::common::run_migrations;
 use super::scheduler::scheduler_fairing;
 use super::transactions::{delete_transaction, destroy_transactions, get_transactions};
-use super::requests::{add_request, get_requests, delete_requests, destroy_requests};
+use super::requests::{add_request, get_requests, delete_request, destroy_requests, get_request_student, answer_request_student, get_completed_requests, delete_completed_request, destroy_completed_requests};
 
 
 pub fn rocket_from_config(figment: Figment) -> Rocket<Build> {
@@ -28,8 +28,13 @@ pub fn rocket_from_config(figment: Figment) -> Rocket<Build> {
                 destroy_transactions,
                 add_request,
                 get_requests,
-                delete_requests,
-                destroy_requests
+                delete_request,
+                destroy_requests,
+                get_request_student,
+                answer_request_student,
+                get_completed_requests,
+                delete_completed_request,
+                destroy_completed_requests
             ],
         );
 
