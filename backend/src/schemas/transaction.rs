@@ -2,6 +2,8 @@ use rocket::serde::{Deserialize, Serialize};
 use sqlx::types::Json;
 
 use super::common::{AccessBinding, DispatchTarget, TransactionStatus};
+use super::challenge::ChallengeOptions;
+
 
 #[derive(Serialize, Deserialize, Clone, Debug, sqlx::FromRow)]
 pub struct Transaction {
@@ -19,6 +21,7 @@ pub struct Transaction {
     pub rows_to_push: Option<Vec<i32>>,
 
     pub access_bindings: Option<Json<Vec<AccessBinding>>>,
+    pub challenge_options: Json<ChallengeOptions>,
 }
 
 // Custom PartialEq function so we can test if transactions from the db (with id and created_at) match those we expect to create (from transactions_from_challenge)
@@ -47,6 +50,7 @@ pub struct CompletedTransaction {
     pub rows_to_push: Option<Vec<i32>>,
 
     pub access_bindings: Option<Json<Vec<AccessBinding>>>,
+    pub challenge_options: Json<ChallengeOptions>,
 
     // Status fields - for completed transactions
     pub attempted_at: Option<i64>,
@@ -74,6 +78,7 @@ impl CompletedTransaction {
             data_intended_name: tx.data_intended_name,
             rows_to_push: tx.rows_to_push,
             access_bindings: tx.access_bindings,
+            challenge_options: tx.challenge_options,
             attempted_at,
             transaction_status,
             stdout,
