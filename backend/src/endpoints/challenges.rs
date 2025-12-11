@@ -9,7 +9,7 @@ use sqlx::types::Json as DbJson;
 
 use rand::Rng;
 
-use crate::schemas::challenge::Challenge;
+use crate::schemas::challenge::{Challenge, ChallengeOptions};
 use crate::schemas::common::{AccessBinding, Db, DispatchTarget};
 use crate::schemas::transaction::Transaction;
 
@@ -24,8 +24,8 @@ pub async fn add_challenge(
         r#"
         INSERT INTO challenges
         (challenge_name, init_dataset_location, init_dataset_rows, init_dataset_name,
-        init_dataset_description, dispatches_to, time_of_first_release, release_proportions, time_between_releases, access_bindings)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        init_dataset_description, dispatches_to, time_of_first_release, release_proportions, time_between_releases, access_bindings, challenge_options)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
         RETURNING
             id,
             challenge_name,
@@ -38,7 +38,8 @@ pub async fn add_challenge(
             time_of_first_release,
             release_proportions,
             time_between_releases,
-            access_bindings as "access_bindings: DbJson<Vec<AccessBinding>>"
+            access_bindings as "access_bindings: DbJson<Vec<AccessBinding>>",
+            challenge_options as "challenge_options: DbJson<ChallengeOptions>"
         "#,
         challenge.challenge_name,
         challenge.init_dataset_location,
@@ -49,7 +50,8 @@ pub async fn add_challenge(
         challenge.time_of_first_release,
         &challenge.release_proportions,
         challenge.time_between_releases,
-        challenge.access_bindings as _
+        challenge.access_bindings as _,
+        challenge.challenge_options as _
     )
     .fetch_one(&mut **db)
     .await.map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
@@ -82,7 +84,8 @@ pub async fn add_transactions_into_db(
             data_intended_name,
             rows_to_push,
             dispatch_location,
-            access_bindings
+            access_bindings,
+            challenge_options
         ) VALUES ",
     );
 
@@ -93,9 +96,10 @@ pub async fn add_transactions_into_db(
             query.push_str(", ");
         }
 
-        let base = i * 8;
+        // TODO: Add a check here to ensure it is properly changed whenever we edit transactions! This has happened too many times already!
+        let base = i * 9;
         query.push_str(&format!(
-            "(${}, ${}, ${}, ${}, ${}, ${}, ${}, ${})",
+            "(${}, ${}, ${}, ${}, ${}, ${}, ${}, ${}, ${})",
             base + 1,
             base + 2,
             base + 3,
@@ -103,7 +107,8 @@ pub async fn add_transactions_into_db(
             base + 5,
             base + 6,
             base + 7,
-            base + 8
+            base + 8,
+            base + 9,
         ));
 
         args.add(tx.challenge_id);
@@ -114,6 +119,7 @@ pub async fn add_transactions_into_db(
         args.add(&tx.rows_to_push);
         args.add(&tx.dispatch_location);
         args.add(&tx.access_bindings);
+        args.add(&tx.challenge_options);
     }
 
     let affected = sqlx::query_with(&query, args)
@@ -173,6 +179,7 @@ fn transactions_from_challenge(challenge: Challenge) -> Result<Vec<Transaction>,
                 data_intended_name: Some(format!("release_{}", i)),
                 rows_to_push: Some(rows_to_push.clone()),
                 access_bindings: challenge.access_bindings.clone(),
+                challenge_options: challenge.challenge_options.clone(),
             };
             transactions.push(transaction);
         }
@@ -200,7 +207,8 @@ pub async fn get_challenges(
             time_of_first_release,
             release_proportions,
             time_between_releases,
-            access_bindings as "access_bindings: DbJson<Vec<AccessBinding>>"
+            access_bindings as "access_bindings: DbJson<Vec<AccessBinding>>",
+            challenge_options as "challenge_options: DbJson<ChallengeOptions>"
         FROM
             challenges;
         "#
@@ -296,6 +304,7 @@ mod tests {
                 release_proportions: normalized.clone(),
                 time_between_releases: 1,
                 access_bindings: None,
+                challenge_options: DbJson(ChallengeOptions::default())
             };
 
             let transactions = transactions_from_challenge(challenge)
@@ -355,7 +364,8 @@ mod tests {
             time_of_first_release: 1000,
             release_proportions: proportions,
             time_between_releases: 60,
-            access_bindings: None
+            access_bindings: None,
+            challenge_options: DbJson(ChallengeOptions::default())
         };
 
         let transactions = transactions_from_challenge(challenge)

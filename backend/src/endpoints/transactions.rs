@@ -6,6 +6,8 @@ use sqlx::types::Json as DbJson;
 
 use crate::schemas::common::{AccessBinding, Db, DispatchTarget};
 use crate::schemas::transaction::Transaction;
+use crate::schemas::challenge::ChallengeOptions;
+
 
 #[get("/api/transactions")]
 pub async fn get_transactions(
@@ -24,7 +26,8 @@ pub async fn get_transactions(
             data_intended_location,
             data_intended_name,
             rows_to_push,
-            access_bindings as "access_bindings: DbJson<Vec<AccessBinding>>"
+            access_bindings as "access_bindings: DbJson<Vec<AccessBinding>>",
+            challenge_options as "challenge_options: DbJson<ChallengeOptions>"
         FROM 
             transactions
         "#

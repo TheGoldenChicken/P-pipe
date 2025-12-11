@@ -7,6 +7,8 @@ use tokio::time::{Duration, interval};
 
 use crate::schemas::common::{AccessBinding, Db, DispatchTarget, TransactionStatus};
 use crate::schemas::transaction::{CompletedTransaction, Transaction};
+use crate::schemas::challenge::ChallengeOptions;
+
 
 async fn process_transaction(tx: &Transaction) -> Result<std::process::Output, Custom<String>> {
     // TODO: Move python_path and script_path to env variables
@@ -58,7 +60,8 @@ async fn transaction_scheduler(pool: sqlx::PgPool) -> Result<(), Custom<String>>
                 data_intended_location,
                 data_intended_name,
                 rows_to_push,
-                access_bindings as "access_bindings: Json<Vec<AccessBinding>>"
+                access_bindings as "access_bindings: Json<Vec<AccessBinding>>",
+                challenge_options as "challenge_options: Json<ChallengeOptions>"
             "#,
             now
         )
@@ -116,12 +119,13 @@ async fn insert_completed_transaction(
             data_intended_name,
             rows_to_push,
             access_bindings,
+            challenge_options,
             attempted_at,
             transaction_status,
             stdout,
             stderr
         ) VALUES (
-            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
         )
         "#,
         tx.challenge_id,
@@ -133,6 +137,7 @@ async fn insert_completed_transaction(
         tx.data_intended_name,
         tx.rows_to_push.as_deref(),
         tx.access_bindings as _,
+        tx.challenge_options as _,
         tx.attempted_at,
         tx.transaction_status.clone() as TransactionStatus,
         tx.stdout,
