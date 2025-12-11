@@ -22,6 +22,7 @@ pub struct Challenge {
     pub time_between_releases: i64,
 
     pub access_bindings: Option<Json<Vec<AccessBinding>>>,
+    #[serde(default)]
     pub challenge_options: Json<ChallengeOptions>,
 }
 
