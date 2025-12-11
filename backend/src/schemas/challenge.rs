@@ -56,7 +56,7 @@ pub struct ChallengeOptions {
     pub makes_requests_randomly: Option<bool>,
     pub min_time_between_requests: Option<u64>,
     pub max_time_between_requests: Option<u64>,
-    pub requests_deadline: Option<u64>,
+    pub requests_deadline: Option<i64>,
     pub validate_request_immediately_on_answer: Option<bool>,
     pub allow_retries_on_request: Option<bool>,
     pub return_completed_request_on_student_answer: Option<bool>,
