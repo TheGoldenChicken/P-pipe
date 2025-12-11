@@ -1,8 +1,14 @@
 use std::collections::HashMap;
 use std::fmt;
+use rocket::{http::Status, response::status::Custom};
 use rocket::serde::{Deserialize, Serialize};
 use sqlx::types::Json;
 use rocket::serde::json::Value;
+
+use crate::schemas::transaction::Transaction;
+
+use rand::seq::IteratorRandom;
+use rand::Rng;
 
 // TODO: Potentially add ColumnValue enum to control "accepted" types in requests...
 
@@ -55,6 +61,24 @@ pub struct DataValidationPayload {
     pub count: Option<i32>,
 }
 
+impl DataValidationPayload {
+    pub fn generate_from_transaction(tx: &Transaction) -> Result<Self, Custom<String>> {
+        
+        if let Some(range) = &tx.rows_to_push {
+            let mut rng = rand::rng();
+            let request_size = rng.random_range(1..=(range[1] - range[0] + 1));
+            let rows_to_check = (range[0]..=range[1]).choose_multiple(&mut rng, request_size as usize);
+            Ok(Self {
+                items: rows_to_check,
+                count: Some(request_size)
+            })
+        } else {
+            Err(Custom(Status::InternalServerError, "Given transaction has no rows to push!".to_string()))
+        }
+    }
+}
+
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct BatchPredictionPayload {
     pub items: Vec<HashMap<String, serde_json::Value>>,
@@ -68,7 +92,6 @@ pub struct CalculatedFeaturePayload {
     pub items: Vec<i32>,
     pub count: Option<i32>,
 }
-
 
 
 #[derive(Serialize, Deserialize, Clone, Debug, sqlx::FromRow)]
