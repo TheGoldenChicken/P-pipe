@@ -41,6 +41,7 @@ pub async fn get_requests(
 }
 
 // TODO IMPORTANT: Add check to ensure that expected_response type matches type_of_request type!
+// TODO: See if you can't combine this with endpoints/scheduler/insert_request_with_pool... kinda stupid we need both!
 #[post("/api/requests", data = "<request>")]
 pub async fn add_request(
     mut db: Connection<Db>,
