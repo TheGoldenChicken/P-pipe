@@ -3,7 +3,7 @@ CREATE TYPE request_status as ENUM ('pending', 'correct', 'partial_correct', 'in
 CREATE TABLE IF NOT EXISTS requests (
     id SERIAL PRIMARY KEY,
     challenge_id INTEGER NOT NULL REFERENCES challenges(id) ON DELETE CASCADE ON UPDATE CASCADE,
-    created_at BIGINT DEFAULT EXTRACT(EPOCH FROM now()),
+    created_at BIGINT DEFAULT (EXTRACT(EPOCH FROM now()) * 1000)::BIGINT,
 
     type_of_request jsonB NOT NULL,
     -- type_of_request request_type NOT NULL,
@@ -16,8 +16,8 @@ CREATE TABLE IF NOT EXISTS completed_requests (
     id SERIAL PRIMARY KEY,
     -- UUID GOES HERE, right now, ID is set dynamically, not necessarily reflecting the ID of the request a completed_request was made from...
     challenge_id INTEGER NOT NULL REFERENCES challenges(id) ON DELETE CASCADE ON UPDATE CASCADE,
-    created_at BIGINT DEFAULT EXTRACT(EPOCH FROM now()),
-
+    created_at BIGINT DEFAULT (EXTRACT(EPOCH FROM now()) * 1000)::BIGINT,
+    
     type_of_request jsonB NOT NULL,
     expected_response jsonB NOT NULL,
     deadline BIGINT,

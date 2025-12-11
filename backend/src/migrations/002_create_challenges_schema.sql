@@ -2,7 +2,7 @@ CREATE TABLE IF NOT EXISTS challenges (
     -- Bookkeeping fields
     id SERIAL PRIMARY KEY,
     challenge_name TEXT NOT NULL,
-    created_at BIGINT DEFAULT EXTRACT(EPOCH FROM now()),
+    created_at BIGINT DEFAULT (EXTRACT(EPOCH FROM now()) * 1000)::BIGINT,
     init_dataset_location TEXT NOT NULL,
     init_dataset_rows INTEGER NOT NULL,
     init_dataset_name TEXT,
