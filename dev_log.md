@@ -907,4 +907,36 @@ Easiest, and most minimal implementation might be just to add a few `DataValidat
 Sent the questionaire to S/M-KID, gotten like 17 more answers, nice. Would like around 100, tho. Made some questions for potential qualitative interview for engineers and professors, will execute them if and when I have the time.
 
 Finally, obviously also need to clean up all files, run `rustfmt` and allat, will do that when the feature release rolls around...
->>>>>>> 28f81a3 (CHORE: update dev log)
+
+
+# 11/12/2025
+
+Had a response from a professor who said that he'd submit to an interview next wednesday or Thursday, score. Very nice.
+
+Worked on automatically generated requests for the judgement module today. Also, discovered a glaring issue with the way we handle `expected_response`.
+
+Started by working on a way to include Options in `challenge`, this seemed pretty important, as there are a 100 and one ways we can add requests. For now, I added a struct in Rust, which is just a `jsonB` in Postgres, that'll hold these options: `ChallengeOptions`, basically just a bunch of `Option<T>` fields with an attached `default()` method.
+
+Obviously, this required me to add `ChallengeOptions` to a bunch of endpoints everywhere, but this was no issue. Instead of having it be an `Option<T>`, I let serde choose its default if it wasn't given, that way I don't constantly have to check if `ChallengeOptions is Some()`, which is nice. I should maybe do this for other things, like `acesss_bindings`...
+
+Had a small issue or thought on whether or not I should add them to transactions as well... I generally want my transactions to be more or less 'atomic', but it is a lot of duplicate areas I gotta add them, and right now, no Python script uses anything in `ChallengeOptions`. Thought that might change, however, and took it in every transaction, space on the db probably isn't an issue, and we can always discuss that at length later.
+
+Next, worked on `sheduler.rs` mostly. Basically, based on `tx.challenge_options.makes_request_on_transaction_push`, I create requests when pushing transaction (duh). This required that I was able to generate a request from a transaction. I decided first that the `request_type` will simply be chosen randomly from tx.`challenge_options.challenge_types`, I can just sample from there. That was a bitch.
+
+Then, I needed to generate a request, which was easy for `DataValidation` (just get a random subset of rows). This I did as a method on `DataValidationPayload`, and subsequently was reminded - I should probably move more functionality from functions to methods on schemas... might make stuff more 'encapsulated', which I want maybe? Actually also, should maybe move `request_from_transaction` to be a method on `Transaction`... the aforementioned Payload, only has `from_transaction`. (Which I also need to implement for both `CalculatedFeaturePayload` and `BatchPredictionPayload`)
+
+But then I had to get the `expected_response`. This requires reading the data, which we decided **rust must not do!**. Fuck. Thought about it long and hard for a short while, then decided the best way is to make a Python script, that given a `request_type`, or a transaction, will generate `expected_response`, or a `request_type`. It is a **shitty** solution, because once again, we have to pass data from Python to Rust THROUGH the CLI, fuck, but it really is the best solution. When it comes down to `CalculatedFeature`, for example, no way in hell we wanna go with Rust to make the `expected_response`!
+
+Right now, the amount of Rows to request is just random uniform based on the size of the range, but should also be an option. Also, the `expected_response` is set to placeholder, which is the same as the `type_of_request`. The final "issue" came with how I should add the request to the database itself. I wanted to reuse `endpoints::requests::add_request`, but can't since it uses `Db<Connection>`, whereas the scheduler has access to `PgPool`, which for some stupid reason, cannot be deref'd from `Db<Connection>`. Looked on Github, couldn't find anything. Tried implementing a helper function (like `add_user_to_db` and `add_user` from rustfs program), couldn't make it work, stupid. Gonna look into it later, for now I just added an `add_request_to_db_with_pool` in `scheduler.rs`, so issa good right now.
+
+Finally, I also made everything async, of course, but then did nothing with it, since I just await everything instead. I reckon we can safely create requests while doing other stuff, so I need to start spawning some threads somewhere.
+
+Also also, discovered an error where if the request generation fails, the whole function fails, and since the transactions have already been removed, and since the completed_transaction is only inserted following the request generation.... well the transaction is lost **I SHOULD FIX THAT!**
+
+Also, discovered (or probably, was reminded), that the scheduler craps out entirely (meaning it doesn't resume ever!) if there are any errors with any sub-functions, since they are propagated all the way up... Should *really* address this! Can make the whole platform crap out over a single error.
+
+Also remembered **I should make tests for the transaction scheduler!**, pretty important piece of hardware, no tests for it!
+
+Also discovered I use milis in Rust, but Postgres was using seconds, fixed this by just multiplying `created_at` by 1000 everywhere. Nice.
+
+Next time, should start with making the Python expected_response creator, and then, writing tests for everything. There is still a lot of work to do with the feature as a whole, but just being able to make `DataValidation` requests, only when transactions are pushed, is a good place to start.
