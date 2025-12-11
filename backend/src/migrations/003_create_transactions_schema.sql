@@ -3,8 +3,8 @@ CREATE TABLE IF NOT EXISTS transactions (
     -- Bookkeeping fields
     id SERIAL PRIMARY KEY,
     challenge_id INTEGER NOT NULL REFERENCES challenges(id) ON DELETE CASCADE ON UPDATE CASCADE,
-    created_at BIGINT DEFAULT EXTRACT(EPOCH FROM now()),
-    
+    created_at BIGINT DEFAULT (EXTRACT(EPOCH FROM now()) * 1000)::BIGINT,
+
     -- Transaction info fields
     scheduled_time BIGINT NOT NULL,
     source_data_location TEXT,
@@ -21,8 +21,8 @@ CREATE TABLE IF NOT EXISTS completed_transactions (
     -- Bookkeeping fields
     id SERIAL PRIMARY KEY,
     challenge_id INTEGER NOT NULL REFERENCES challenges(id) ON DELETE CASCADE ON UPDATE CASCADE,
-    created_at BIGINT DEFAULT EXTRACT(EPOCH FROM now()),
-
+    created_at BIGINT DEFAULT (EXTRACT(EPOCH FROM now()) * 1000)::BIGINT,
+    
     -- Transaction info fields
     scheduled_time BIGINT NOT NULL,
     source_data_location TEXT,
