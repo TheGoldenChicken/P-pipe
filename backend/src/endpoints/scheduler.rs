@@ -5,11 +5,71 @@ use std::path::Path;
 use std::process::Command;
 use tokio::time::{Duration, interval};
 
+use rand::seq::IndexedRandom;
+use rand;
+
 use crate::schemas::common::{AccessBinding, Db, DispatchTarget, TransactionStatus};
 use crate::schemas::transaction::{CompletedTransaction, Transaction};
 use crate::schemas::challenge::ChallengeOptions;
+use crate::schemas::request::{Request, RequestType, DataValidationPayload};
+
+// TODO: Move this as a method on Transaction? Should make sense...
+async fn request_from_transaction(tx: &Transaction) -> Result<Request, Custom<String>> {
+    let generated_request_type = match &tx.challenge_options.possible_request_types {
+        Some(requests) => {
+            let mut rng = rand::rng();
+            let random_request_type = requests.choose(&mut rng).unwrap(); // TODO: Remove naked unwrap here!
+            match random_request_type {
+                _ => RequestType::DataValidation(DataValidationPayload::generate_from_transaction(&tx)?)
+            }
+        }
+        None => RequestType::DataValidation(DataValidationPayload::generate_from_transaction(&tx)?)
+    };
+
+    let generated_request_string = serde_json::to_string(&generated_request_type)
+        .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
 
 
+    // let python_path = Path::new("../.venv/bin/python");
+    // let script_path = Path::new("../py_modules/expected_response_generator.py");
+
+    // let generated_expected_output = Command::new(python_path)
+    //     .arg(script_path)
+    //     .arg("--request_type")
+    //     .arg(generated_request_string)
+    //     .output()
+    //     .map_err(|e| Custom(
+    //         Status::InternalServerError,
+    //         format!("Failed calling Python script to generate expected repsonse with error {:?}", e),
+    //     ))?;
+    
+    // let stdout = &String::from_utf8_lossy(&generated_expected_output.stdout);
+    // let parsed_stdout = serde_json::from_str::<RequestType>(&stdout)
+    //     .map_err(|e| Custom(
+    //         Status::InternalServerError,
+    //         format!("Failed to parse JSON for expected response from Python output with error: {:?}", e),
+    //     ))?;
+        
+    // TODO: Remove this temporary way of doing things while we don't have the Python script
+    let parsed_stdout = generated_request_type.clone();
+
+    let deadline = match &tx.challenge_options.requests_deadline {
+        Some(deadline) => Some(Utc ::now().timestamp_millis() + deadline),
+        None => None
+    };
+
+    Ok(Request {
+        id: None,
+        created_at: None,
+        challenge_id: tx.challenge_id,
+        type_of_request: Json(generated_request_type),
+        expected_response: Json(parsed_stdout),
+        deadline: deadline
+
+    })
+}
+
+// TODO: Rename this to something along the lines of "move data as transaction, given that it doesn't process *everything* (not requests)"
 async fn process_transaction(tx: &Transaction) -> Result<std::process::Output, Custom<String>> {
     // TODO: Move python_path and script_path to env variables
     let python_path = Path::new("../.venv/bin/python");
@@ -24,16 +84,39 @@ async fn process_transaction(tx: &Transaction) -> Result<std::process::Output, C
         .arg("orchestrator-cli")
         .arg("--transaction")
         .arg(transaction_string)
-        .output();
-
-    // TODO: Ask Hans if there isn't a better way of doing this...
-    match output {
-        Ok(result) => Ok(result),
-        Err(e) => Err(Custom(
+        .output()
+        .map_err(|e| Custom(
             Status::InternalServerError,
             format!("Failed calling Python script with error {:?}", e),
-        )),
-    }
+        ))?;
+    Ok(output)
+}
+
+pub async fn add_request_with_pool(
+    pool: &sqlx::PgPool,
+    request: Request,
+) -> Result<(), Custom<String>> {
+    sqlx::query!(
+        r#"
+        INSERT INTO requests
+        (challenge_id, type_of_request, expected_response, deadline)
+        VALUES ($1, $2, $3, $4)
+        "#,
+        request.challenge_id,
+        request.type_of_request as _,
+        request.expected_response as _,
+        request.deadline
+    )
+    .execute(pool) // 👈 use &PgPool here
+    .await
+    .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
+    Ok(())
+}
+
+
+async fn process_request_with_transaction(pool: &sqlx::PgPool, tx: &Transaction) -> Result<(), Custom<String>> {
+    let transaction_request = request_from_transaction(&tx).await?;
+    add_request_with_pool(pool, transaction_request).await
 }
 
 async fn transaction_scheduler(pool: sqlx::PgPool) -> Result<(), Custom<String>> {
@@ -81,6 +164,12 @@ async fn transaction_scheduler(pool: sqlx::PgPool) -> Result<(), Custom<String>>
                 true => TransactionStatus::Success,
                 false => TransactionStatus::Failed,
             };
+
+            // TODO IMPORTANT: If request processing fails, the entire transaction is lost, fix this, potentially by using sqlx::transactions! 
+            // TODO: We don't even make use of async through this whole thing... do that instead for this one, spawn a new thread? Does it even take long tho?
+            if tx.challenge_options.makes_requests_on_transaction_push.unwrap_or_default() {
+                process_request_with_transaction(&pool, &tx).await?;
+            }
 
             let completed_tx = CompletedTransaction::from_transaction(
                 tx,
@@ -154,6 +243,7 @@ pub fn scheduler_fairing() -> AdHoc {
         // We don't use Db<PgPool> here, since connection is only used inside of a request guard
         let db = rocket.state::<Db>().expect("Db not initialized");
         let pool = db.0.clone();
+        // TODO: Fix the scheduler completely crapping out on the first failure, it should just move on from it!
         tokio::spawn(async move {
             if let Err(e) = transaction_scheduler(pool.clone()).await {
                 eprintln!("Scheduled task failed: {:?}", e);
