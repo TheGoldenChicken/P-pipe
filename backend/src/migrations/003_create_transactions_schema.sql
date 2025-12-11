@@ -13,7 +13,8 @@ CREATE TABLE IF NOT EXISTS transactions (
     data_intended_name TEXT, -- Name of the single data slice that'll be in the folder
     rows_to_push INTEGER[],
 
-    access_bindings jsonB
+    access_bindings jsonB,
+    challenge_options jsonB NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS completed_transactions (
@@ -30,7 +31,8 @@ CREATE TABLE IF NOT EXISTS completed_transactions (
     data_intended_name TEXT,
     rows_to_push INTEGER[],
 
-    access_bindings jsonB, 
+    access_bindings jsonB,
+    challenge_options jsonB NOT NULL, 
 
     -- Status fields
     attempted_at BIGINT,
