@@ -263,14 +263,12 @@ pub fn scheduler_fairing() -> AdHoc {
 mod tests {
     use super::*;
     use crate::testing_common::instances::transaction_instance;
-
-    // TODO: Finish this unit test
     #[tokio::test]
-    async fn test_request_from_transaction() {
+    async fn test_basic_request_from_transaction() {
         let transation = transaction_instance();
-        let generated_request = request_from_transaction(&transation)
+        request_from_transaction(&transation)
             .await.expect("Could not generate request from transaction");
-        println!("{:?}", generated_request);
-        // println!("{:?}", transation);
     }
+
+    // TODO: For future, add test to ensure it also picks different, random RequestTypes for a given transaction
 }
