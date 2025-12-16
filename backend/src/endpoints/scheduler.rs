@@ -7,6 +7,7 @@ use tokio::time::{Duration, interval};
 
 use rand::seq::IndexedRandom;
 use rand;
+use crate::global_rng::global_rng;
 
 use crate::schemas::common::{AccessBinding, Db, DispatchTarget, TransactionStatus};
 use crate::schemas::transaction::{CompletedTransaction, Transaction};
@@ -14,10 +15,10 @@ use crate::schemas::challenge::ChallengeOptions;
 use crate::schemas::request::{Request, RequestType, DataValidationPayload};
 
 // TODO: Move this as a method on Transaction? Should make sense...
-async fn request_from_transaction(tx: &Transaction) -> Result<Request, Custom<String>> {
+pub async fn request_from_transaction(tx: &Transaction) -> Result<Request, Custom<String>> {
     let generated_request_type = match &tx.challenge_options.possible_request_types {
         Some(requests) => {
-            let mut rng = rand::rng();
+            let mut rng = global_rng();
             let random_request_type = requests.choose(&mut rng).unwrap(); // TODO: Remove naked unwrap here!
             match random_request_type {
                 _ => RequestType::DataValidation(DataValidationPayload::generate_from_transaction(&tx)?)
@@ -28,30 +29,34 @@ async fn request_from_transaction(tx: &Transaction) -> Result<Request, Custom<St
 
     let generated_request_string = serde_json::to_string(&generated_request_type)
         .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
+    let transaction_string = serde_json::to_string(&tx)
+        .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
 
+    let python_path = Path::new("../.venv/bin/python");
+    let script_path = Path::new("../py_modules/judgement/expected_response_cli.py");
 
-    // let python_path = Path::new("../.venv/bin/python");
-    // let script_path = Path::new("../py_modules/expected_response_generator.py");
-
-    // let generated_expected_output = Command::new(python_path)
-    //     .arg(script_path)
-    //     .arg("--request_type")
-    //     .arg(generated_request_string)
-    //     .output()
-    //     .map_err(|e| Custom(
-    //         Status::InternalServerError,
-    //         format!("Failed calling Python script to generate expected repsonse with error {:?}", e),
-    //     ))?;
+    let output = Command::new(python_path)
+        .arg(script_path)
+        .arg("--request")
+        .arg(&generated_request_string)
+        .arg("--transaction")
+        .arg(&transaction_string)
+        .output()
+        .map_err(|e| Custom(
+            Status::InternalServerError,
+            format!("Failed calling Python script to generate expected repsonse with error {:?}", e),
+        ))?;
     
-    // let stdout = &String::from_utf8_lossy(&generated_expected_output.stdout);
-    // let parsed_stdout = serde_json::from_str::<RequestType>(&stdout)
-    //     .map_err(|e| Custom(
-    //         Status::InternalServerError,
-    //         format!("Failed to parse JSON for expected response from Python output with error: {:?}", e),
-    //     ))?;
-        
-    // TODO: Remove this temporary way of doing things while we don't have the Python script
-    let parsed_stdout = generated_request_type.clone();
+    if output.status.code() != Some(0) {
+        return Err(Custom(Status::InternalServerError, format!("Python script failed with error code: {:?} and error: {:?}", output.status.code(), String::from_utf8_lossy(&output.stderr))))
+    }
+    
+    let stdout = &String::from_utf8_lossy(&output.stdout);
+    let parsed_stdout = serde_json::from_str::<RequestType>(&stdout)
+        .map_err(|e| Custom(
+            Status::InternalServerError,
+            format!("Failed to parse JSON for expected response from Python output with error: {:?}", e),
+        ))?;
 
     let deadline = match &tx.challenge_options.requests_deadline {
         Some(deadline) => Some(Utc ::now().timestamp_millis() + deadline),
@@ -70,7 +75,7 @@ async fn request_from_transaction(tx: &Transaction) -> Result<Request, Custom<St
 }
 
 // TODO: Rename this to something along the lines of "move data as transaction, given that it doesn't process *everything* (not requests)"
-async fn process_transaction(tx: &Transaction) -> Result<std::process::Output, Custom<String>> {
+pub async fn process_transaction(tx: &Transaction) -> Result<std::process::Output, Custom<String>> {
     // TODO: Move python_path and script_path to env variables
     let python_path = Path::new("../.venv/bin/python");
     let script_path = Path::new("../py_modules/orchestrator.py");
@@ -114,7 +119,7 @@ pub async fn add_request_with_pool(
 }
 
 
-async fn process_request_with_transaction(pool: &sqlx::PgPool, tx: &Transaction) -> Result<(), Custom<String>> {
+pub async fn process_request_with_transaction(pool: &sqlx::PgPool, tx: &Transaction) -> Result<(), Custom<String>> {
     let transaction_request = request_from_transaction(&tx).await?;
     add_request_with_pool(pool, transaction_request).await
 }
@@ -192,7 +197,7 @@ async fn transaction_scheduler(pool: sqlx::PgPool) -> Result<(), Custom<String>>
     }
 }
 
-async fn insert_completed_transaction(
+pub async fn insert_completed_transaction(
     pool: &sqlx::PgPool,
     tx: &CompletedTransaction,
 ) -> Result<(), sqlx::Error> {
@@ -251,4 +256,21 @@ pub fn scheduler_fairing() -> AdHoc {
         });
         rocket
     })
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::testing_common::instances::transaction_instance;
+
+    // TODO: Finish this unit test
+    #[tokio::test]
+    async fn test_request_from_transaction() {
+        let transation = transaction_instance();
+        let generated_request = request_from_transaction(&transation)
+            .await.expect("Could not generate request from transaction");
+        println!("{:?}", generated_request);
+        // println!("{:?}", transation);
+    }
 }
