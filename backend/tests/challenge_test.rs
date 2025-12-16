@@ -33,7 +33,7 @@ async fn unpack_challenge_repsponse(response: LocalResponse<'_>) -> Challenge {
         .expect("No challenge returned from POST!")
 }
 
-#[sqlx::test]
+#[sqlx::test(migrations = "src/migrations")]
 async fn challenge_post_basic(
     _: PgPoolOptions,
     pg_connect_options: PgConnectOptions,
@@ -51,7 +51,7 @@ async fn challenge_post_basic(
     Ok(())
 }
 
-#[sqlx::test]
+#[sqlx::test(migrations = "src/migrations")]
 async fn challenge_get_basic(
     _: PgPoolOptions,
     pg_connect_options: PgConnectOptions,
@@ -68,8 +68,8 @@ async fn challenge_get_basic(
         INSERT INTO challenges
         (challenge_name, init_dataset_location, init_dataset_rows, init_dataset_name,
         init_dataset_description, dispatches_to, time_of_first_release, release_proportions,
-        time_between_releases, access_bindings)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        time_between_releases, access_bindings, challenge_options)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
         "#,
         challenge.challenge_name,
         challenge.init_dataset_location,
@@ -80,7 +80,8 @@ async fn challenge_get_basic(
         challenge.time_of_first_release,
         &challenge.release_proportions,
         challenge.time_between_releases,
-        challenge.access_bindings as _
+        challenge.access_bindings as _,
+        challenge.challenge_options as _,
     )
     .execute(&pool)
     .await?;
@@ -91,7 +92,7 @@ async fn challenge_get_basic(
     Ok(())
 }
 
-#[sqlx::test]
+#[sqlx::test(migrations = "src/migrations")]
 async fn post_minimal_challenge(
     _: PgPoolOptions,
     pg_connect_options: PgConnectOptions,
@@ -108,7 +109,7 @@ async fn post_minimal_challenge(
     Ok(())
 }
 
-#[sqlx::test]
+#[sqlx::test(migrations = "src/migrations")]
 async fn challenge_delete_basic(
     _: PgPoolOptions,
     pg_connect_options: PgConnectOptions,
@@ -125,8 +126,8 @@ async fn challenge_delete_basic(
         INSERT INTO challenges
         (id, challenge_name, init_dataset_location, init_dataset_rows, init_dataset_name,
         init_dataset_description, dispatches_to, time_of_first_release, release_proportions,
-        time_between_releases, access_bindings)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        time_between_releases, access_bindings, challenge_options)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         "#,
         1,
         challenge.challenge_name,
@@ -138,7 +139,8 @@ async fn challenge_delete_basic(
         challenge.time_of_first_release,
         &challenge.release_proportions,
         challenge.time_between_releases,
-        challenge.access_bindings as _
+        challenge.access_bindings as _,
+        challenge.challenge_options as _,
     )
     .execute(&pool)
     .await?;
@@ -164,7 +166,7 @@ async fn challenge_delete_basic(
     Ok(())
 }
 
-#[sqlx::test]
+#[sqlx::test(migrations = "src/migrations")]
 async fn challenge_destroy_all(
     _: PgPoolOptions,
     pg_connect_options: PgConnectOptions,
@@ -184,8 +186,8 @@ async fn challenge_destroy_all(
             INSERT INTO challenges
             (id, challenge_name, init_dataset_location, init_dataset_rows, init_dataset_name,
             init_dataset_description, dispatches_to, time_of_first_release, release_proportions,
-            time_between_releases, access_bindings)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            time_between_releases, access_bindings, challenge_options)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
             "#,
         )
         .bind(i)
@@ -199,6 +201,7 @@ async fn challenge_destroy_all(
         .bind(&challenge.release_proportions)
         .bind(challenge.time_between_releases)
         .bind(&challenge.access_bindings)
+        .bind(&challenge.challenge_options)
         .execute(&pool)
         .await?;
     }
@@ -238,8 +241,8 @@ async fn add_transactions_into_db_basic(pool: sqlx::PgPool) {
         INSERT INTO challenges
         (id, challenge_name, init_dataset_location, init_dataset_rows, init_dataset_name,
         init_dataset_description, dispatches_to, time_of_first_release, release_proportions,
-        time_between_releases, access_bindings)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        time_between_releases, access_bindings, challenge_options)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         "#,
         challenge.id,
         challenge.challenge_name,
@@ -251,7 +254,8 @@ async fn add_transactions_into_db_basic(pool: sqlx::PgPool) {
         challenge.time_of_first_release,
         &challenge.release_proportions,
         challenge.time_between_releases,
-        challenge.access_bindings as _
+        challenge.access_bindings as _,
+        challenge.challenge_options as _
     )
     .execute(&mut *conn)
     .await
@@ -284,8 +288,8 @@ async fn add_transactions_into_db_expected_output(pool: sqlx::PgPool) {
         INSERT INTO challenges
         (id, challenge_name, init_dataset_location, init_dataset_rows, init_dataset_name,
         init_dataset_description, dispatches_to, time_of_first_release, release_proportions,
-        time_between_releases, access_bindings)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        time_between_releases, access_bindings, challenge_options)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         "#,
         challenge.id,
         challenge.challenge_name,
@@ -297,7 +301,8 @@ async fn add_transactions_into_db_expected_output(pool: sqlx::PgPool) {
         challenge.time_of_first_release,
         &challenge.release_proportions,
         challenge.time_between_releases,
-        challenge.access_bindings as _
+        challenge.access_bindings as _,
+        challenge.challenge_options as _
     )
     .execute(&mut *conn)
     .await

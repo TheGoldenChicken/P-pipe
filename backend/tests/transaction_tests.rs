@@ -38,8 +38,8 @@ where
         INSERT INTO challenges
         (id, challenge_name, init_dataset_location, init_dataset_rows, init_dataset_name,
         init_dataset_description, dispatches_to, time_of_first_release, release_proportions,
-        time_between_releases, access_bindings)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        time_between_releases, access_bindings, challenge_options)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         "#,
         challenge.id,
         challenge.challenge_name,
@@ -51,7 +51,8 @@ where
         challenge.time_of_first_release,
         &challenge.release_proportions,
         challenge.time_between_releases,
-        challenge.access_bindings as _
+        challenge.access_bindings as _,
+        challenge.challenge_options as _,
     )
     .execute(executor)
     .await?;
@@ -81,8 +82,8 @@ async fn transactions_get_basic(
         r#"
         INSERT INTO transactions
         (challenge_id, scheduled_time, source_data_location, dispatch_location,
-        data_intended_location, data_intended_name, rows_to_push, access_bindings)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        data_intended_location, data_intended_name, rows_to_push, access_bindings, challenge_options)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         "#,
         tx.challenge_id,
         tx.scheduled_time,
@@ -91,7 +92,8 @@ async fn transactions_get_basic(
         tx.data_intended_location,
         tx.data_intended_name,
         tx.rows_to_push.as_ref().unwrap(),
-        tx.access_bindings as _
+        tx.access_bindings as _,
+        tx.challenge_options as _
     )
     .execute(&pool)
     .await?;
@@ -124,8 +126,8 @@ async fn transaction_delete_basic(
         r#"
         INSERT INTO transactions
         (challenge_id, scheduled_time, source_data_location, dispatch_location,
-        data_intended_location, data_intended_name, rows_to_push, access_bindings)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        data_intended_location, data_intended_name, rows_to_push, access_bindings, challenge_options)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         RETURNING id
         "#,
         tx.challenge_id,
@@ -135,7 +137,8 @@ async fn transaction_delete_basic(
         tx.data_intended_location,
         tx.data_intended_name,
         tx.rows_to_push.as_ref().unwrap(),
-        tx.access_bindings as _
+        tx.access_bindings as _,
+        tx.challenge_options as _
     )
     .fetch_one(&pool)
     .await?;
@@ -178,8 +181,8 @@ async fn transactions_destroy_basic(
             r#"
             INSERT INTO transactions
             (challenge_id, scheduled_time, source_data_location, dispatch_location,
-            data_intended_location, data_intended_name, rows_to_push, access_bindings)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            data_intended_location, data_intended_name, rows_to_push, access_bindings, challenge_options)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             "#,
             tx.challenge_id,
             tx.scheduled_time,
@@ -188,7 +191,8 @@ async fn transactions_destroy_basic(
             tx.data_intended_location,
             tx.data_intended_name,
             tx.rows_to_push.as_ref().unwrap(),
-            tx.access_bindings as _
+            tx.access_bindings as _,
+            tx.challenge_options as _
         )
         .execute(&pool)
         .await?;
