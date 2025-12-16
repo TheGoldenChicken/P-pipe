@@ -6,12 +6,12 @@ use sqlx::types::Json;
 use rocket::serde::json::Value;
 
 use crate::schemas::transaction::Transaction;
+use crate::global_rng::global_rng;
 
 use rand::seq::IteratorRandom;
 use rand::Rng;
 
 // TODO: Potentially add ColumnValue enum to control "accepted" types in requests...
-
 // pub enum ColumnValue {
 //     Str(String),
 //     Num(i64),
@@ -65,7 +65,7 @@ impl DataValidationPayload {
     pub fn generate_from_transaction(tx: &Transaction) -> Result<Self, Custom<String>> {
         
         if let Some(range) = &tx.rows_to_push {
-            let mut rng = rand::rng();
+            let mut rng = global_rng();
             let request_size = rng.random_range(1..=(range[1] - range[0] + 1));
             let rows_to_check = (range[0]..=range[1]).choose_multiple(&mut rng, request_size as usize);
             Ok(Self {
@@ -106,6 +106,15 @@ pub struct Request {
     pub deadline: Option<i64>,
 }
 
+impl PartialEq for Request {
+    fn eq(&self, other: &Self) -> bool {
+        self.challenge_id == other.challenge_id
+            && self.type_of_request == other.type_of_request
+            && self.expected_response == other.expected_response
+    }
+}
+
+
 #[derive(Serialize, Deserialize, Clone, Debug, sqlx::FromRow)]
 pub struct CompletedRequest {
     pub id: Option<i32>,
@@ -145,6 +154,3 @@ impl CompletedRequest {
         }
     }
 }
-
-
-// TODO: Potentially implement from_request for CompletedRequest...
