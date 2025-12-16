@@ -84,7 +84,7 @@ pub fn transactions_expected_from_challenge_instance() -> Vec<Transaction> {
             dispatch_location: Some(DispatchTarget::S3),
             data_intended_location: "challenge_42_testingchallenge1".into(),
             data_intended_name: Some("release_0".into()),
-            rows_to_push: Some(vec![0, 90]),
+            rows_to_push: Some(vec![0, 45]),
             access_bindings: Some(sqlx::types::Json(accessbindings_instance())),
             challenge_options: Json(ChallengeOptions::default())
         },
@@ -97,7 +97,7 @@ pub fn transactions_expected_from_challenge_instance() -> Vec<Transaction> {
             dispatch_location: Some(DispatchTarget::S3),
             data_intended_location: "challenge_42_testingchallenge1".into(),
             data_intended_name: Some("release_1".into()),
-            rows_to_push: Some(vec![90, 120]),
+            rows_to_push: Some(vec![45, 105]),
             access_bindings: Some(sqlx::types::Json(accessbindings_instance())),
             challenge_options: Json(ChallengeOptions::default())
         },
@@ -110,7 +110,7 @@ pub fn transactions_expected_from_challenge_instance() -> Vec<Transaction> {
             dispatch_location: Some(DispatchTarget::S3),
             data_intended_location: "challenge_42_testingchallenge1".into(),
             data_intended_name: Some("release_2".into()),
-            rows_to_push: Some(vec![120, 149]),
+            rows_to_push: Some(vec![105, 150]),
             access_bindings: Some(sqlx::types::Json(accessbindings_instance())),
             challenge_options: Json(ChallengeOptions::default())
         },
@@ -127,7 +127,7 @@ pub fn transaction_instance() -> Transaction {
         dispatch_location: Some(DispatchTarget::S3),
         data_intended_location: "challenge_42_testingchallenge1".into(),
         data_intended_name: Some("release_2".into()),
-        rows_to_push: Some(vec![120, 149]),
+        rows_to_push: Some(vec![105, 150]),
         access_bindings: Some(sqlx::types::Json(accessbindings_instance())),
         challenge_options: Json(ChallengeOptions::default())
     }
