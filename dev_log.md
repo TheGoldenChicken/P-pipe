@@ -940,3 +940,28 @@ Also remembered **I should make tests for the transaction scheduler!**, pretty i
 Also discovered I use milis in Rust, but Postgres was using seconds, fixed this by just multiplying `created_at` by 1000 everywhere. Nice.
 
 Next time, should start with making the Python expected_response creator, and then, writing tests for everything. There is still a lot of work to do with the feature as a whole, but just being able to make `DataValidation` requests, only when transactions are pushed, is a good place to start.
+
+
+# 16/12/2025
+
+**The iris dataset only contains 150 rows...Bruh.**
+
+Occassaionally (at seemingly random times), pandas will complain about not having fsppec. Think it is connected to when this is the `source_data_location` given `"s3://bucket/data.csv"`
+
+Alter table to not require foreign key constraints!
+
+Worked on implementing `get_expected_response` on the Python side, and then making simple tests on the Rust side. Apart from the listed above issues, no real issues came up. I had to change `instances` a bunch of times, but no biggie. For launch.json, i might wanna create a separate list of arguments that I can then reference in it. Might make more sense than filling up the lines there with arguments for the cli interfaces.
+
+Accepted that I probably won't have functionality for `BatchPrediction` and `CalculatedFeature` yet... which is fine. For now, it just throws `NotImplementedError` in Python if the user tries to use them. This might not be handled in Rust in the best way, however. There are also a few panic cases, especially when dealing with `rows_to_push` on the transactions side... in general we just gotta watch out for this.
+
+I had a few problems making the unit tests for Request, as I had to generate a Request, and then use the prcess_request function to see the result matched. THey didn't because of randomness. So I opted to replace `rand::rng()` with a `global_rng()` function, that returns exactly the same, but when called with a `feature`-flag (something you can do with `features --featres deterministic`, for example), it uses a seed value of 42. Nice. This is partly because rust can't just globally seed everything like what Numpy and Torch does with `set_seed` like functions.
+
+The amount of tests I made for Requests and Scheduler was lacking a bit. The scheduler remains completely untested, so nothing there. I only test that it *Can* generate a request, since I don't really know what to compare the request generated from a transaction against... I guess a premade request? But at that point, we're back to completely brittle tests...
+
+For request schemas, I made a simple proptest for `DataValidationPayload`, that tests that no matter the `rows_to_push` range (randomly created), the `items` returned (what the user is suposed to get), is correct, so it is contained within rows_to_push range. 
+
+This might do it for request tests on the scheduler side, though I still need INTEGRATION TESTS for requests. This is important, right now, we're not testing the endpoints in any way.
+
+Nor are we testing that python returns the correct `expected_result` when we call it with Rust (or at all for that matter). But here, I had to make pytests, and I wasn't feeling it. Likewise, we're not doing any testing for the judgement module as a whole. We should do that.
+
+So **testing** is the name of the game before we can finish this... 'sprint', if you wanna call it that.
