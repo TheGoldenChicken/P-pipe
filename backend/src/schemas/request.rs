@@ -63,7 +63,6 @@ pub struct DataValidationPayload {
 
 impl DataValidationPayload {
     pub fn generate_from_transaction(tx: &Transaction) -> Result<Self, Custom<String>> {
-        
         if let Some(range) = &tx.rows_to_push {
             let mut rng = global_rng();
             let request_size = rng.random_range(1..=(range[1] - range[0] + 1));
@@ -153,4 +152,50 @@ impl CompletedRequest {
             judgement_message,
         }
     }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use proptest::prelude::*;
+    use crate::schemas::challenge::ChallengeOptions;
+    proptest! {
+        #[test]
+        fn test_data_val_payload_generation_range(start in any::<i32>(), len in 1..1000) {
+            let end = start + len;
+            let rows_to_push = vec![start, end];
+            
+            let transaction = Transaction {
+                id: None,
+                challenge_id: 0,
+                created_at: None,
+                scheduled_time: 1120,
+                source_data_location: Some("../py_modules/tests/test_data/iris.csv".into()),
+                dispatch_location: None,
+                data_intended_location: "challenge_42_testingchallenge1".into(),
+                data_intended_name: None,
+                rows_to_push: Some(rows_to_push),
+                access_bindings: None,
+                challenge_options: Json(ChallengeOptions::default())
+            };
+
+            let generated_payload = DataValidationPayload::generate_from_transaction(&transaction)
+                .expect("Could not generate DataValidationPayload from transaction");
+
+            prop_assert!(
+                generated_payload.items.iter().all(|&x| (start..=end).contains(&x)),
+                "Items {:?} not all within {}..={}", generated_payload.items, start, end
+            );
+            
+            let generated_payload_count = generated_payload.count.unwrap();
+            let generated_payload_len = generated_payload.items.len() as i32;
+
+            prop_assert!(
+                generated_payload_count == generated_payload_len,
+                "Generated payload count value: {} does not match its len of: {}", generated_payload_count, generated_payload_len
+            )
+        }
+    }
+    
 }
