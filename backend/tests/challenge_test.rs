@@ -3,7 +3,7 @@ use rocket::local::asynchronous::LocalResponse;
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use sqlx::types::Json as DbJson;
 
-use backend::schemas::challenge::Challenge;
+use backend::schemas::challenge::{Challenge, ChallengeOptions};
 use backend::schemas::common::{AccessBinding, DispatchTarget};
 use backend::schemas::transaction::Transaction;
 
@@ -323,7 +323,8 @@ async fn add_transactions_into_db_expected_output(pool: sqlx::PgPool) {
             data_intended_location,
             data_intended_name,
             rows_to_push,
-            access_bindings as "access_bindings: DbJson<Vec<AccessBinding>>"
+            access_bindings as "access_bindings: DbJson<Vec<AccessBinding>>",
+            challenge_options as "challenge_options: DbJson<ChallengeOptions>"
         FROM 
             transactions
         "#
