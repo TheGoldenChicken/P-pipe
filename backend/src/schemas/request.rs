@@ -61,12 +61,13 @@ pub struct DataValidationPayload {
     pub count: Option<i32>,
 }
 
+// TODO: Off-by-one errors here!
 impl DataValidationPayload {
     pub fn generate_from_transaction(tx: &Transaction) -> Result<Self, Custom<String>> {
         if let Some(range) = &tx.rows_to_push {
             let mut rng = global_rng();
-            let request_size = rng.random_range(1..=(range[1] - range[0] + 1));
-            let rows_to_check = (range[0]..=range[1]).choose_multiple(&mut rng, request_size as usize);
+            let request_size = rng.random_range(1..=(range[1] - range[0])).max(1);
+            let rows_to_check = (range[0]..=range[1]-1).choose_multiple(&mut rng, request_size as usize);
             Ok(Self {
                 items: rows_to_check,
                 count: Some(request_size)
