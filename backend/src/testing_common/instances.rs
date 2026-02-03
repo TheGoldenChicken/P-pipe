@@ -1,6 +1,7 @@
 use sqlx::types::Json;
 use crate::schemas::challenge::{Challenge, ChallengeOptions};
 use crate::schemas::common::{AccessBinding, DispatchTarget, DriveBinding, S3Binding};
+use crate::schemas::request::{BatchPredictionPayload, RequestType};
 use crate::schemas::transaction::Transaction;
 
 pub fn accessbindings_instance() -> Vec<AccessBinding> {
@@ -131,4 +132,40 @@ pub fn transaction_instance() -> Transaction {
         access_bindings: Some(sqlx::types::Json(accessbindings_instance())),
         challenge_options: Json(ChallengeOptions::default())
     }
+}
+
+// TODO: This is a rather ugly instance, and I'd prefer not to use it
+use serde_json::json;
+use std::collections::HashMap;
+
+pub fn batch_prediction_instance() -> RequestType {
+    // Helper to build each row
+    fn row(
+        row: i32,
+        sepal_length: f64,
+        sepal_width: f64,
+        petal_length: f64,
+        petal_width: f64,
+        variety: &str,
+    ) -> HashMap<String, serde_json::Value> {
+        let mut map = HashMap::new();
+        map.insert("row".into(), json!(row));
+        map.insert("sepal.length".into(), json!(sepal_length));
+        map.insert("sepal.width".into(), json!(sepal_width));
+        map.insert("petal.length".into(), json!(petal_length));
+        map.insert("petal.width".into(), json!(petal_width));
+        map.insert("variety".into(), json!(variety));
+        map
+    }
+
+    let items = vec![
+        row(5, 5.4, 3.9, 1.7, 0.4, "Setosa"),
+        row(6, 4.6, 3.4, 1.4, 0.3, "Setosa"),
+        row(7, 5.0, 3.4, 1.5, 0.2, "Setosa"),
+    ];
+
+    RequestType::BatchPrediction(BatchPredictionPayload {
+        items,
+        count: Some(3),
+    })
 }
