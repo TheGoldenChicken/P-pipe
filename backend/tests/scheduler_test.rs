@@ -47,10 +47,9 @@ async fn process_request_basic(
     LIMIT 1
     "#,
     ).fetch_one(&pool).await?;
-
     assert_eq!(
         expected_request, recieved_requests,
-        "Request from request_from_transaction did not match request from db following process_request_with_transaction"
+        "DID YOU RUN TESTS WITH `--features deterministic` ??? Request from request_from_transaction did not match request from db following process_request_with_transaction"
     );
     Ok(())
 }
