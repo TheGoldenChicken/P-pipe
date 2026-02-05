@@ -48,10 +48,11 @@ pub async fn request_from_transaction(tx: &Transaction) -> Result<Request, Custo
         ))?;
     
     if output.status.code() != Some(0) {
-        return Err(Custom(Status::InternalServerError, format!("Python script failed with error code: {:?} and error: {:?}", output.status.code(), String::from_utf8_lossy(&output.stderr))))
+        return Err(Custom(Status::InternalServerError, format!("Python script failed with error code: {:?} and error: {:?}, and stdout {:?}", output.status.code(), String::from_utf8_lossy(&output.stderr), String::from_utf8_lossy(&output.stdout))))
     }
     
     let stdout = &String::from_utf8_lossy(&output.stdout);
+
     let parsed_stdout = serde_json::from_str::<RequestType>(&stdout)
         .map_err(|e| Custom(
             Status::InternalServerError,
@@ -130,6 +131,10 @@ async fn transaction_scheduler(pool: sqlx::PgPool) -> Result<(), Custom<String>>
         ticker.tick().await;
         let now = Utc::now().timestamp_millis();
 
+        let mut tx = pool.begin()
+            .await
+            .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
+
         // TODO: Move all transactions that are affected to another table - completed transactions or something.
         let transactions = sqlx::query_as!(
             Transaction,
@@ -153,7 +158,7 @@ async fn transaction_scheduler(pool: sqlx::PgPool) -> Result<(), Custom<String>>
             "#,
             now
         )
-        .fetch_all(&pool)
+        .fetch_all(&mut *tx)
         .await
         .map_err(|e| {
             Custom(
@@ -194,6 +199,9 @@ async fn transaction_scheduler(pool: sqlx::PgPool) -> Result<(), Custom<String>>
                 .await
                 .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
         }
+        tx.commit()
+            .await
+            .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
     }
 }
 
