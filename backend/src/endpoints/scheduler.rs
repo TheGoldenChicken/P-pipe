@@ -125,7 +125,20 @@ pub async fn process_request_with_transaction(pool: &sqlx::PgPool, tx: &Transact
     add_request_with_pool(pool, transaction_request).await
 }
 
-async fn transaction_scheduler(pool: sqlx::PgPool) -> Result<(), Custom<String>> {
+async fn transaction_scheduler(pool: sqlx::PgPool) {
+    let mut ticker = interval(Duration::from_secs(5));
+
+    loop {
+        ticker.tick().await;
+
+        if let Err(e) = run_scheduler_iteration(&pool).await {
+            eprintln!("Scheduler iteration failed: {:?}", e); // TODO: Throw these errors someplace else... Logging perhaps?
+            tokio::time::sleep(Duration::from_secs(2)).await; // TODO: see if it makes sense to use a ticker for this?
+        }
+    }
+}
+
+async fn run_scheduler_iteration(pool: &sqlx::PgPool) -> Result<(), Custom<String>> {
     let mut ticker = interval(Duration::from_secs(5));
     loop {
         ticker.tick().await;
@@ -258,9 +271,7 @@ pub fn scheduler_fairing() -> AdHoc {
         let pool = db.0.clone();
         // TODO: Fix the scheduler completely crapping out on the first failure, it should just move on from it!
         tokio::spawn(async move {
-            if let Err(e) = transaction_scheduler(pool.clone()).await {
-                eprintln!("Scheduled task failed: {:?}", e);
-            }
+            transaction_scheduler(pool.clone()).await;
         });
         rocket
     })
