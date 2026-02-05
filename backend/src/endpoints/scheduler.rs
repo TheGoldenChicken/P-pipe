@@ -140,82 +140,81 @@ async fn transaction_scheduler(pool: sqlx::PgPool) {
 
 async fn run_scheduler_iteration(pool: &sqlx::PgPool) -> Result<(), Custom<String>> {
     let mut ticker = interval(Duration::from_secs(5));
-    loop {
-        ticker.tick().await;
-        let now = Utc::now().timestamp_millis();
+    ticker.tick().await;
+    let now = Utc::now().timestamp_millis();
 
-        let mut tx = pool.begin()
-            .await
-            .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
-
-        // TODO: Move all transactions that are affected to another table - completed transactions or something.
-        let transactions = sqlx::query_as!(
-            Transaction,
-            r#"
-            DELETE FROM
-                transactions
-            WHERE
-                scheduled_Time <= $1
-            RETURNING
-                id,
-                challenge_id,
-                created_at,
-                scheduled_time,
-                source_data_location,
-                dispatch_location as "dispatch_location: DispatchTarget",
-                data_intended_location,
-                data_intended_name,
-                rows_to_push,
-                access_bindings as "access_bindings: Json<Vec<AccessBinding>>",
-                challenge_options as "challenge_options: Json<ChallengeOptions>"
-            "#,
-            now
-        )
-        .fetch_all(&mut *tx)
+    let mut tx = pool.begin()
         .await
-        .map_err(|e| {
-            Custom(
-                Status::InternalServerError,
-                format!("Scheduler to grab transactions from database, {}", e),
-            )
-        })?;
+        .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
 
-        for tx in transactions {
-            let process_output = process_transaction(&tx).await?;
+    // TODO: Move all transactions that are affected to another table - completed transactions or something.
+    let transactions = sqlx::query_as!(
+        Transaction,
+        r#"
+        DELETE FROM
+            transactions
+        WHERE
+            scheduled_Time <= $1
+        RETURNING
+            id,
+            challenge_id,
+            created_at,
+            scheduled_time,
+            source_data_location,
+            dispatch_location as "dispatch_location: DispatchTarget",
+            data_intended_location,
+            data_intended_name,
+            rows_to_push,
+            access_bindings as "access_bindings: Json<Vec<AccessBinding>>",
+            challenge_options as "challenge_options: Json<ChallengeOptions>"
+        "#,
+        now
+    )
+    .fetch_all(&mut *tx)
+    .await
+    .map_err(|e| {
+        Custom(
+            Status::InternalServerError,
+            format!("Scheduler to grab transactions from database, {}", e),
+        )
+    })?;
 
-            let tx_status = match process_output.status.success() {
-                true => TransactionStatus::Success,
-                false => TransactionStatus::Failed,
-            };
+    for tx in transactions {
+        let process_output = process_transaction(&tx).await?;
 
-            // TODO IMPORTANT: If request processing fails, the entire transaction is lost, fix this, potentially by using sqlx::transactions! 
-            // TODO: We don't even make use of async through this whole thing... do that instead for this one, spawn a new thread? Does it even take long tho?
-            if tx.challenge_options.makes_requests_on_transaction_push.unwrap_or_default() {
-                process_request_with_transaction(&pool, &tx).await?;
-            }
+        let tx_status = match process_output.status.success() {
+            true => TransactionStatus::Success,
+            false => TransactionStatus::Failed,
+        };
 
-            let completed_tx = CompletedTransaction::from_transaction(
-                tx,
-                Some(now),
-                tx_status,
-                Some(
-                    String::from_utf8(process_output.stdout)
-                        .expect("Could not convert py stdout utf8 string!"),
-                ),
-                Some(
-                    String::from_utf8(process_output.stderr)
-                        .expect("Could not convert py stderr utf8 string!"),
-                ),
-            );
-
-            insert_completed_transaction(&pool, &completed_tx)
-                .await
-                .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
+        // TODO IMPORTANT: If request processing fails, the entire transaction is lost, fix this, potentially by using sqlx::transactions! 
+        // TODO: We don't even make use of async through this whole thing... do that instead for this one, spawn a new thread? Does it even take long tho?
+        if tx.challenge_options.makes_requests_on_transaction_push.unwrap_or_default() {
+            process_request_with_transaction(&pool, &tx).await?;
         }
-        tx.commit()
+
+        let completed_tx = CompletedTransaction::from_transaction(
+            tx,
+            Some(now),
+            tx_status,
+            Some(
+                String::from_utf8(process_output.stdout)
+                    .expect("Could not convert py stdout utf8 string!"),
+            ),
+            Some(
+                String::from_utf8(process_output.stderr)
+                    .expect("Could not convert py stderr utf8 string!"),
+            ),
+        );
+
+        insert_completed_transaction(&pool, &completed_tx)
             .await
             .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
     }
+    tx.commit()
+        .await
+        .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
+    Ok(())
 }
 
 pub async fn insert_completed_transaction(
