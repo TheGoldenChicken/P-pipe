@@ -6,7 +6,6 @@ use sqlx::types::Json as DbJson;
 use backend::schemas::challenge::{Challenge, ChallengeOptions};
 use backend::schemas::common::{AccessBinding, DispatchTarget};
 use backend::schemas::transaction::Transaction;
-
 use backend::endpoints::challenges::add_transactions_into_db;
 use backend::testing_common::connect::async_client_from_pg_connect_options;
 use backend::testing_common::instances::{
@@ -343,67 +342,3 @@ async fn add_transactions_into_db_expected_output(pool: sqlx::PgPool) {
         "Transactions to function did not match transctions from db afterwards!"
     )
 }
-
-// #[sqlx::test]
-// async fn challenge_post_posts_to_transactions(
-//     _: PgPoolOptions,
-//     pg_connect_options: PgConnectOptions,
-// ) -> sqlx::Result<()> {
-//     let pool = PgPoolOptions::new()
-//         .connect_with(pg_connect_options.clone())
-//         .await?;
-
-//     let client = async_client_from_pg_connect_options(pg_connect_options).await;
-//     let base_challenges = "/api/challenges";
-
-//     let post = Challenge {
-//         id: None,
-//         created_at: None,
-//         name: String::from("testing_challenge"),
-//         init_dataset_location: String::from("/home/cicero/ppipe/tests/test_data/iris.csv"),
-//         init_dataset_rows: 300,
-//         init_dataset_name: Some(String::from("iris")),
-//         init_dataset_description: Some(String::from(
-//             "a .csv collection of flowers, classification task",
-//         )),
-//         time_of_first_release: 5000,
-//         release_proportions: vec![0.50, 0.25],
-//         time_between_releases: 100,
-//     };
-
-//     let response = client.post(base_challenges).json(&post).dispatch().await;
-
-//     assert_eq!(
-//         response.status(),
-//         Status::Ok,
-//         "Expected success status, got {:?}",
-//         response.status()
-//     );
-
-//     let response = response
-//         .into_json::<Vec<Challenge>>()
-//         .await
-//         .expect("Failed to deserialize Challenge response")
-//         .get(0)
-//         .cloned()
-//         .expect("No challenge returned from POST!");
-
-//     let expected_transactions = transactions_from_challenge(response)
-//         .expect("Could not generate expected transactions from challenge");
-
-//     let db_transactions: Vec<Transaction> =
-//         sqlx::query_as::<_, Transaction>("SELECT * FROM transactions")
-//             .fetch_all(&pool)
-//             .await?;
-
-//     if db_transactions.is_empty() {
-//         panic!("No transactions found in db after POST api/challenges")
-//     }
-
-//     assert_eq!(
-//         db_transactions, expected_transactions,
-//         "Expected db transactions after POST api/challenges to match expected transactions from transactions_from_challenge!"
-//     );
-
-//     Ok(())
-// }

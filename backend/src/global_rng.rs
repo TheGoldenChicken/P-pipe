@@ -1,7 +1,7 @@
 #[allow(unused_imports)]
-use rand::{RngCore, SeedableRng};
-#[allow(unused_imports)]
 use rand::rngs::{StdRng, ThreadRng};
+#[allow(unused_imports)]
+use rand::{RngCore, SeedableRng};
 use std::sync::OnceLock;
 
 #[allow(unused_imports)]
@@ -26,23 +26,3 @@ pub fn global_rng() -> StdRng {
 pub fn global_rng() -> ThreadRng {
     rand::rng()
 }
-
-// Previous method - Use system clock, unused since changes from function call to function call...
-// #[allow(unused_imports)]
-// use std::time::{SystemTime, UNIX_EPOCH};
-// #[cfg(feature = "deterministic")]
-// pub fn global_rng() -> StdRng {
-//     let nanos = SystemTime::now()
-//         .duration_since(UNIX_EPOCH)
-//         .unwrap()
-//         .as_nanos();
-
-//     StdRng::seed_from_u64(nanos as u64)
-// }
-
-
-// #[allow(dead_code)]
-// #[cfg(feature = "deterministic")]
-// pub fn global_rng() -> StdRng {
-//    StdRng::seed_from_u64(42)
-// }

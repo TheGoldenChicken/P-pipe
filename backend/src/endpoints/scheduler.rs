@@ -4,15 +4,14 @@ use sqlx::types::Json;
 use std::path::Path;
 use std::process::Command;
 use tokio::time::{Duration, interval};
-
-use rand::seq::IndexedRandom;
 use rand;
-use crate::global_rng::global_rng;
+use rand::seq::IndexedRandom;
 
-use crate::schemas::common::{AccessBinding, Db, DispatchTarget, TransactionStatus};
-use crate::schemas::transaction::{CompletedTransaction, Transaction};
 use crate::schemas::challenge::ChallengeOptions;
-use crate::schemas::request::{Request, RequestType, DataValidationPayload};
+use crate::schemas::common::{AccessBinding, Db, DispatchTarget, TransactionStatus};
+use crate::schemas::request::{DataValidationPayload, Request, RequestType};
+use crate::schemas::transaction::{CompletedTransaction, Transaction};
+use crate::global_rng::global_rng;
 
 // TODO: Move this as a method on Transaction? Should make sense...
 pub async fn request_from_transaction(tx: &Transaction) -> Result<Request, Custom<String>> {
@@ -21,10 +20,12 @@ pub async fn request_from_transaction(tx: &Transaction) -> Result<Request, Custo
             let mut rng = global_rng();
             let random_request_type = requests.choose(&mut rng).unwrap(); // TODO: Remove naked unwrap here!
             match random_request_type {
-                _ => RequestType::DataValidation(DataValidationPayload::generate_from_transaction(&tx)?)
+                _ => RequestType::DataValidation(DataValidationPayload::generate_from_transaction(
+                    &tx,
+                )?),
             }
         }
-        None => RequestType::DataValidation(DataValidationPayload::generate_from_transaction(&tx)?)
+        None => RequestType::DataValidation(DataValidationPayload::generate_from_transaction(&tx)?),
     };
 
     let generated_request_string = serde_json::to_string(&generated_request_type)
@@ -42,26 +43,43 @@ pub async fn request_from_transaction(tx: &Transaction) -> Result<Request, Custo
         .arg("--transaction")
         .arg(&transaction_string)
         .output()
-        .map_err(|e| Custom(
-            Status::InternalServerError,
-            format!("Failed calling Python script to generate expected repsonse with error {:?}", e),
-        ))?;
-    
+        .map_err(|e| {
+            Custom(
+                Status::InternalServerError,
+                format!(
+                    "Failed calling Python script to generate expected repsonse with error {:?}",
+                    e
+                ),
+            )
+        })?;
+
     if output.status.code() != Some(0) {
-        return Err(Custom(Status::InternalServerError, format!("Python script failed with error code: {:?} and error: {:?}, and stdout {:?}", output.status.code(), String::from_utf8_lossy(&output.stderr), String::from_utf8_lossy(&output.stdout))))
+        return Err(Custom(
+            Status::InternalServerError,
+            format!(
+                "Python script failed with error code: {:?} and error: {:?}, and stdout {:?}",
+                output.status.code(),
+                String::from_utf8_lossy(&output.stderr),
+                String::from_utf8_lossy(&output.stdout)
+            ),
+        ));
     }
-    
+
     let stdout = &String::from_utf8_lossy(&output.stdout);
 
-    let parsed_stdout = serde_json::from_str::<RequestType>(&stdout)
-        .map_err(|e| Custom(
+    let parsed_stdout = serde_json::from_str::<RequestType>(&stdout).map_err(|e| {
+        Custom(
             Status::InternalServerError,
-            format!("Failed to parse JSON for expected response from Python output with error: {:?}", e),
-        ))?;
+            format!(
+                "Failed to parse JSON for expected response from Python output with error: {:?}",
+                e
+            ),
+        )
+    })?;
 
     let deadline = match &tx.challenge_options.requests_deadline {
-        Some(deadline) => Some(Utc ::now().timestamp_millis() + deadline),
-        None => None
+        Some(deadline) => Some(Utc::now().timestamp_millis() + deadline),
+        None => None,
     };
 
     Ok(Request {
@@ -70,8 +88,7 @@ pub async fn request_from_transaction(tx: &Transaction) -> Result<Request, Custo
         challenge_id: tx.challenge_id,
         type_of_request: Json(generated_request_type),
         expected_response: Json(parsed_stdout),
-        deadline: deadline
-
+        deadline: deadline,
     })
 }
 
@@ -91,10 +108,12 @@ pub async fn process_transaction(tx: &Transaction) -> Result<std::process::Outpu
         .arg("--transaction")
         .arg(transaction_string)
         .output()
-        .map_err(|e| Custom(
-            Status::InternalServerError,
-            format!("Failed calling Python script with error {:?}", e),
-        ))?;
+        .map_err(|e| {
+            Custom(
+                Status::InternalServerError,
+                format!("Failed calling Python script with error {:?}", e),
+            )
+        })?;
     Ok(output)
 }
 
@@ -113,14 +132,16 @@ pub async fn add_request_with_pool(
         request.expected_response as _,
         request.deadline
     )
-    .execute(pool) // 👈 use &PgPool here
+    .execute(pool) 
     .await
     .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
     Ok(())
 }
 
-
-pub async fn process_request_with_transaction(pool: &sqlx::PgPool, tx: &Transaction) -> Result<(), Custom<String>> {
+pub async fn process_request_with_transaction(
+    pool: &sqlx::PgPool,
+    tx: &Transaction,
+) -> Result<(), Custom<String>> {
     let transaction_request = request_from_transaction(&tx).await?;
     add_request_with_pool(pool, transaction_request).await
 }
@@ -139,11 +160,10 @@ async fn transaction_scheduler(pool: sqlx::PgPool) {
 }
 
 async fn run_scheduler_iteration(pool: &sqlx::PgPool) -> Result<(), Custom<String>> {
-    let mut ticker = interval(Duration::from_secs(5));
-    ticker.tick().await;
     let now = Utc::now().timestamp_millis();
 
-    let mut tx = pool.begin()
+    let mut tx = pool
+        .begin()
         .await
         .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
 
@@ -187,9 +207,13 @@ async fn run_scheduler_iteration(pool: &sqlx::PgPool) -> Result<(), Custom<Strin
             false => TransactionStatus::Failed,
         };
 
-        // TODO IMPORTANT: If request processing fails, the entire transaction is lost, fix this, potentially by using sqlx::transactions! 
         // TODO: We don't even make use of async through this whole thing... do that instead for this one, spawn a new thread? Does it even take long tho?
-        if tx.challenge_options.makes_requests_on_transaction_push.unwrap_or_default() {
+        // Create db transaction so our transactions are not lost if processing fails halfway through...
+        if tx
+            .challenge_options
+            .makes_requests_on_transaction_push
+            .unwrap_or_default()
+        {
             process_request_with_transaction(&pool, &tx).await?;
         }
 
@@ -211,6 +235,8 @@ async fn run_scheduler_iteration(pool: &sqlx::PgPool) -> Result<(), Custom<Strin
             .await
             .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
     }
+    
+    // Commit transaction when we know it is good
     tx.commit()
         .await
         .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
@@ -276,7 +302,6 @@ pub fn scheduler_fairing() -> AdHoc {
     })
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -285,7 +310,8 @@ mod tests {
     async fn test_basic_request_from_transaction() {
         let transation = transaction_instance();
         request_from_transaction(&transation)
-            .await.expect("Could not generate request from transaction");
+            .await
+            .expect("Could not generate request from transaction");
     }
 
     // TODO: For future, add test to ensure it also picks different, random RequestTypes for a given transaction

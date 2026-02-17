@@ -1,13 +1,11 @@
+use rand::Rng;
 use rand::seq::IndexedRandom;
 use rocket::serde::json::Json;
-use rocket::{delete, get, post}; // Have to do this as long as src/lib.rs contains `pub mod endpoints;`, as it breaks #[macro_use]
+use rocket::{delete, get, post};
 use rocket::{http::Status, response::status::Custom};
-
 use rocket_db_pools::Connection;
 use sqlx::Arguments; // Even though arguments appears unused, it is used in the background (macros perhaps?)
 use sqlx::types::Json as DbJson;
-
-use rand::Rng;
 
 use crate::schemas::challenge::{Challenge, ChallengeOptions};
 use crate::schemas::common::{AccessBinding, Db, DispatchTarget};
@@ -64,8 +62,8 @@ pub async fn add_challenge(
 }
 
 // TODO: Consider if makes sense to have db be anything that implements sqlx::Executor<'c, Database=sqlx::Postgres>
-// Tested in integration tests, not unittests!
 // TODO IMPORTANT: Really have a good dig into this one, will fail regularly if we don't find a better way of structuring it, and we'll have no idea why it fails...
+// Despite not being an endpoint, this is tested through integration tests, not unittests!
 pub async fn add_transactions_into_db(
     // db: &mut Connection<Db>,
     db: &mut sqlx::PgConnection,
@@ -158,7 +156,7 @@ fn transactions_from_challenge(challenge: Challenge) -> Result<Vec<Transaction>,
             .ok_or_else(|| Custom(Status::BadRequest, "Missing challenge ID".to_string()))?;
 
         // TODO: Consider if this is safe behavior... can it panic?
-        // Random slice of Dispatches to
+        // Random slice of dispatches_to
         let mut rng: rand::prelude::ThreadRng = rand::rng();
         let n = rng.random_range(1..=challenge.dispatches_to.len());
         let dispatch_locations = challenge.dispatches_to.choose_multiple(&mut rng, n);
@@ -247,6 +245,10 @@ mod tests {
         challenge_instance, transactions_expected_from_challenge_instance,
     };
     use proptest::prelude::*;
+    // Wish I could be without this, but it also lets me iterate over them...
+    use proptest::sample::subsequence;
+    use strum::{EnumCount, IntoEnumIterator};
+
 
     #[test]
     fn test_transactions_from_challenge_basic() {
@@ -328,11 +330,6 @@ mod tests {
             );
         }
     }
-
-    // Wish I could be without this, but it also lets me iterate over them...
-    use proptest::sample::subsequence;
-    use strum::{EnumCount, IntoEnumIterator};
-    // const DISPATCH_TARGET_COUNT: u64 = 3;
 
     fn subset_strategy() -> impl Strategy<Value = Vec<DispatchTarget>> {
         let all = DispatchTarget::iter().collect::<Vec<DispatchTarget>>();

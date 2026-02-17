@@ -1,4 +1,4 @@
-use rocket::{Build, Rocket, fairing}; // Have to do this as long as src/lib.rs contains `pub mod endpoints;`, as it breaks #[macro_use]
+use rocket::{Build, Rocket, fairing};
 use rocket_db_pools::Database;
 use std::env;
 
@@ -10,7 +10,7 @@ pub async fn run_migrations(rocket: Rocket<Build>) -> fairing::Result {
         .unwrap_or(false);
 
     if !should_migrate {
-        eprintln!("🔧 Skipping migrations due to config");
+        eprintln!("Skipping migrations due to config");
         return Ok(rocket);
     }
 

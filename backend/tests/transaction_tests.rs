@@ -1,10 +1,10 @@
 use rocket::http::Status;
 use rocket::local::asynchronous::LocalResponse;
-use sqlx::{Executor, Postgres};
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
+use sqlx::{Executor, Postgres};
 
-use backend::schemas::transaction::Transaction;
 use backend::schemas::challenge::Challenge;
+use backend::schemas::transaction::Transaction;
 use backend::testing_common::connect::async_client_from_pg_connect_options;
 use backend::testing_common::instances::{challenge_instance, transaction_instance};
 
@@ -25,11 +25,7 @@ async fn unpack_transaction_response(response: LocalResponse<'_>) -> Vec<Transac
         .expect("Failed to deserialize Transaction response")
 }
 
-
-pub async fn add_challenge_to_db<'a, E>(
-    executor: E,
-    challenge: &Challenge,
-) -> sqlx::Result<()>
+pub async fn add_challenge_to_db<'a, E>(executor: E, challenge: &Challenge) -> sqlx::Result<()>
 where
     E: Executor<'a, Database = Postgres>,
 {
@@ -71,8 +67,9 @@ async fn transactions_get_basic(
 
     // Gotta do this so the insert does not violate foreign key constraints!
     let challenge = challenge_instance();
-    add_challenge_to_db(&pool, &challenge).await
-    .expect("Could not insert challenge to db!");
+    add_challenge_to_db(&pool, &challenge)
+        .await
+        .expect("Could not insert challenge to db!");
 
     let client = async_client_from_pg_connect_options(pg_connect_options).await;
 
@@ -115,8 +112,9 @@ async fn transaction_delete_basic(
         .await?;
 
     let challenge = challenge_instance();
-    add_challenge_to_db(&pool, &challenge).await
-    .expect("Could not insert challenge to db!");
+    add_challenge_to_db(&pool, &challenge)
+        .await
+        .expect("Could not insert challenge to db!");
 
     let client = async_client_from_pg_connect_options(pg_connect_options).await;
 
@@ -169,8 +167,9 @@ async fn transactions_destroy_basic(
         .await?;
 
     let challenge = challenge_instance();
-    add_challenge_to_db(&pool, &challenge).await
-    .expect("Could not insert challenge to db!");
+    add_challenge_to_db(&pool, &challenge)
+        .await
+        .expect("Could not insert challenge to db!");
 
     let client = async_client_from_pg_connect_options(pg_connect_options).await;
 

@@ -1,8 +1,8 @@
-use sqlx::types::Json;
 use crate::schemas::challenge::{Challenge, ChallengeOptions};
 use crate::schemas::common::{AccessBinding, DispatchTarget, DriveBinding, S3Binding};
 use crate::schemas::request::{BatchPredictionPayload, RequestType};
 use crate::schemas::transaction::Transaction;
+use sqlx::types::Json;
 
 pub fn accessbindings_instance() -> Vec<AccessBinding> {
     vec![
@@ -33,7 +33,7 @@ pub fn challenge_instance() -> Challenge {
         release_proportions: vec![0.3, 0.4, 0.3],
         time_between_releases: 60,
         access_bindings: Some(Json(access_bindings)),
-        challenge_options: Json(ChallengeOptions::default())
+        challenge_options: Json(ChallengeOptions::default()),
     }
 }
 
@@ -51,7 +51,7 @@ pub fn minimal_challenge_instance() -> Challenge {
         release_proportions: vec![0.3, 0.4, 0.3],
         time_between_releases: 60,
         access_bindings: None,
-        challenge_options: Json(ChallengeOptions::default())
+        challenge_options: Json(ChallengeOptions::default()),
     }
 }
 
@@ -70,7 +70,7 @@ pub fn challenge_instance_multiple_dispatch() -> Challenge {
         release_proportions: vec![0.3, 0.4, 0.3],
         time_between_releases: 60,
         access_bindings: Some(Json(access_bindings)),
-        challenge_options: Json(ChallengeOptions::default())
+        challenge_options: Json(ChallengeOptions::default()),
     }
 }
 
@@ -87,7 +87,7 @@ pub fn transactions_expected_from_challenge_instance() -> Vec<Transaction> {
             data_intended_name: Some("release_0".into()),
             rows_to_push: Some(vec![0, 45]),
             access_bindings: Some(sqlx::types::Json(accessbindings_instance())),
-            challenge_options: Json(ChallengeOptions::default())
+            challenge_options: Json(ChallengeOptions::default()),
         },
         Transaction {
             id: None,
@@ -100,7 +100,7 @@ pub fn transactions_expected_from_challenge_instance() -> Vec<Transaction> {
             data_intended_name: Some("release_1".into()),
             rows_to_push: Some(vec![45, 105]),
             access_bindings: Some(sqlx::types::Json(accessbindings_instance())),
-            challenge_options: Json(ChallengeOptions::default())
+            challenge_options: Json(ChallengeOptions::default()),
         },
         Transaction {
             id: None,
@@ -113,7 +113,7 @@ pub fn transactions_expected_from_challenge_instance() -> Vec<Transaction> {
             data_intended_name: Some("release_2".into()),
             rows_to_push: Some(vec![105, 150]),
             access_bindings: Some(sqlx::types::Json(accessbindings_instance())),
-            challenge_options: Json(ChallengeOptions::default())
+            challenge_options: Json(ChallengeOptions::default()),
         },
     ]
 }
@@ -130,7 +130,7 @@ pub fn transaction_instance() -> Transaction {
         data_intended_name: Some("release_2".into()),
         rows_to_push: Some(vec![105, 150]),
         access_bindings: Some(sqlx::types::Json(accessbindings_instance())),
-        challenge_options: Json(ChallengeOptions::default())
+        challenge_options: Json(ChallengeOptions::default()),
     }
 }
 
