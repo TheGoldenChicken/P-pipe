@@ -1,6 +1,6 @@
 import click
 import json
-import py_modules.rclone_functions as rclone_functions
+from py_modules import rclone_functions
 
 # TODO: Currently missing functionality
 # 1. Giving other users permission to drive and s3 buckets
@@ -24,7 +24,7 @@ def unpack_transaction_json(transaction: str):
     # missing = [field for field in REQUIRED_FIELDS if field not in parsed]
     # if missing:
     #     raise ValueError(f"Missing required fields: {', '.join(missing)}")
-
+    
     # Unpack required fields
     id = parsed['id']
     challenge_id = parsed['challenge_id']

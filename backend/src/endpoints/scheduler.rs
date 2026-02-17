@@ -33,11 +33,12 @@ pub async fn request_from_transaction(tx: &Transaction) -> Result<Request, Custo
     let transaction_string = serde_json::to_string(&tx)
         .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
 
-    let python_path = Path::new("../.venv/bin/python");
-    let script_path = Path::new("../py_modules/judgement/expected_response_cli.py");
+    let python_path = Path::new(".venv/bin/python");
 
     let output = Command::new(python_path)
-        .arg(script_path)
+        .current_dir("..")
+        .arg("-m")
+        .arg("py_modules.judgement.expected_response_cli")
         .arg("--request")
         .arg(&generated_request_string)
         .arg("--transaction")
@@ -94,16 +95,17 @@ pub async fn request_from_transaction(tx: &Transaction) -> Result<Request, Custo
 
 // TODO: Rename this to something along the lines of "move data as transaction, given that it doesn't process *everything* (not requests)"
 pub async fn process_transaction(tx: &Transaction) -> Result<std::process::Output, Custom<String>> {
-    // TODO: Move python_path and script_path to env variables
-    let python_path = Path::new("../.venv/bin/python");
-    let script_path = Path::new("../py_modules/orchestrator.py");
+    // TODO: Move python_path to env variable
+    let python_path = Path::new(".venv/bin/python");
 
     println!("Processing transaction!");
     let transaction_string = serde_json::to_string(&tx)
         .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
 
     let output = Command::new(python_path)
-        .arg(script_path)
+        .current_dir("..")
+        .arg("-m")
+        .arg("py_modules.orchestrator")
         .arg("orchestrator-cli")
         .arg("--transaction")
         .arg(transaction_string)
