@@ -1,6 +1,4 @@
 import pytest
-import json
-import pandas as pd
 from pathlib import Path
 from rclone_python import rclone
 
