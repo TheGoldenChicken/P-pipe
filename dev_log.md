@@ -745,6 +745,7 @@ Implement previously discussed possibility for user to request access to certain
 
 # 26/11 - 01/12-2025
 
+<<<<<<< HEAD
 Had a meeting with Nicki, mostly about report structure. In general, it will follow this overall structure:
 
 - Abstract
@@ -755,10 +756,33 @@ Had a meeting with Nicki, mostly about report structure. In general, it will fol
 - Project studies
   - Quantitative and qualitative studies
 - Solution ideas and proposals
+=======
+
+Had a meeting with Nicki, mostly about report structure. In general, it will follow this overall structure:
+
+- Abstract
+
+- Introduction
+
+- Theory / Methodology
+  - ML, MLOps, DevOps, MLOps Maturity Model, etc.
+
+  - All overall subjects used (testing, but not pytesting, backends, but not rocket, etc.)
+
+- Project studies
+  - Quantitative and qualitative studies
+
+- Solution ideas and proposals
+
+>>>>>>> features/judgement-module
 - P-pipe introduction
   - "Demo" of desired product
   - State of current product
   - Overview of modules (should probably just be a flowchart looking thing)
+<<<<<<< HEAD
+=======
+
+>>>>>>> features/judgement-module
 - Development "Story"
   - Primer: Overall tools used
   - 'Ramble' about tool choices dependent on experience rather than merit
@@ -772,9 +796,11 @@ Had a meeting with Nicki, mostly about report structure. In general, it will fol
 - References
 - Appendix
 
-Overall, Nicki emphasized angling the report as more of an experience piece / guide - a kind of collection of experiences for future implementors.. He also emphasized the importance of ensuring people know what kind of report it is in the beginning - it can be annoying to read halfway through a report only to figure out it ain't that kind fo report by the end.
+
+Overall, Nicki emphasized angling the report as more of an experience piece / guide - a kind of collection of experiences for future implementors.. He also emphasized the importance of ensuring people know what kind of report it is in the beginning - it can be annoying to read halfway through a report only to figure out it ain't that kind fo report by the end. 
 
 About the questionaires and interviews and such, he didn't appear to put much importance. They could back up the project, but the act of implementing something appeared to be important enough, even *if* it turns out it doesn't make sense to make - then I've just made something cool that doesn't do much for the good of man ig.
+
 
 In Nickis opinion, the most important part is simply to get writing on many of the methodology and "story" parts as possible - we can always change it later. To that end, I've started writing the development of the first MVP version, splitting it somewhat up into "Database", "Backend", "Dispatcher", and "Testing". 
 
@@ -873,7 +899,10 @@ Anyways, then we are suposed to run some Python code to validate the data itself
 
 Anyways, after that, we create the `CompletedRequest` (which we also implemented, and had minor problems with `RequestStatus` not being `Option<T>` in Rust, but being optional on the db). Finally insert this into the `completed_requests` in database, and at the same time, delete the entry from `requests`... This last part I say "at the same time", because it actually was pretty simple to make transactions work in sqlx, so that it won't execute either transaction unless both succeed. I should probably use this for transactions as well... A shame it took me so long to figure out that it is dog-easy to make it work.  
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
+=======
+>>>>>>> features/judgement-module
 
 
 # 08/12/2025
