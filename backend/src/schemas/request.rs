@@ -1,15 +1,14 @@
+use rocket::serde::json::Value;
+use rocket::serde::{Deserialize, Serialize};
+use rocket::{http::Status, response::status::Custom};
+use sqlx::types::Json;
 use std::collections::HashMap;
 use std::fmt;
-use rocket::{http::Status, response::status::Custom};
-use rocket::serde::{Deserialize, Serialize};
-use sqlx::types::Json;
-use rocket::serde::json::Value;
-
-use crate::schemas::transaction::Transaction;
-use crate::global_rng::global_rng;
-
-use rand::seq::IteratorRandom;
 use rand::Rng;
+use rand::seq::IteratorRandom;
+
+use crate::global_rng::global_rng;
+use crate::schemas::transaction::Transaction;
 
 // TODO: Potentially add ColumnValue enum to control "accepted" types in requests...
 // pub enum ColumnValue {
@@ -17,8 +16,6 @@ use rand::Rng;
 //     Num(i64),
 //     Bool(bool),
 // }
-
-
 
 #[derive(sqlx::Type, Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[sqlx(type_name = "request_status", rename_all = "snake_case")]
@@ -28,7 +25,7 @@ pub enum RequestStatus {
     PartialCorrect,
     Incorrect,
     SyntaxError,
-    DeadlineExceeded
+    DeadlineExceeded,
 }
 
 // Cannot map to a postgres type because it is a tuple kinda type! Be aware!
@@ -37,7 +34,7 @@ pub enum RequestStatus {
 pub enum RequestType {
     DataValidation(DataValidationPayload),
     BatchPrediction(BatchPredictionPayload),
-    CalculatedFeature(CalculatedFeaturePayload)
+    CalculatedFeature(CalculatedFeaturePayload),
 }
 
 impl fmt::Display for RequestType {
@@ -67,17 +64,20 @@ impl DataValidationPayload {
         if let Some(range) = &tx.rows_to_push {
             let mut rng = global_rng();
             let request_size = rng.random_range(1..=(range[1] - range[0])).max(1);
-            let rows_to_check = (range[0]..=range[1]-1).choose_multiple(&mut rng, request_size as usize);
+            let rows_to_check =
+                (range[0]..=range[1] - 1).choose_multiple(&mut rng, request_size as usize);
             Ok(Self {
                 items: rows_to_check,
-                count: Some(request_size)
+                count: Some(request_size),
             })
         } else {
-            Err(Custom(Status::InternalServerError, "Given transaction has no rows to push!".to_string()))
+            Err(Custom(
+                Status::InternalServerError,
+                "Given transaction has no rows to push!".to_string(),
+            ))
         }
     }
 }
-
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct BatchPredictionPayload {
@@ -92,7 +92,6 @@ pub struct CalculatedFeaturePayload {
     pub items: Vec<i32>,
     pub count: Option<i32>,
 }
-
 
 #[derive(Serialize, Deserialize, Clone, Debug, sqlx::FromRow)]
 pub struct Request {
@@ -114,7 +113,6 @@ impl PartialEq for Request {
     }
 }
 
-
 #[derive(Serialize, Deserialize, Clone, Debug, sqlx::FromRow)]
 pub struct CompletedRequest {
     pub id: Option<i32>,
@@ -129,7 +127,7 @@ pub struct CompletedRequest {
     pub request_status: RequestStatus,
     pub submitted_at: Option<i64>,
     pub submitted_response: Option<Json<RequestType>>,
-    pub judgement_message: Option<Json<Value>>
+    pub judgement_message: Option<Json<Value>>,
 }
 
 impl CompletedRequest {
@@ -138,7 +136,7 @@ impl CompletedRequest {
         status: RequestStatus,
         submitted_at: Option<i64>,
         submitted_response: Json<RequestType>,
-        judgement_message: Option<Json<Value>>
+        judgement_message: Option<Json<Value>>,
     ) -> Self {
         CompletedRequest {
             id: req.id,
@@ -155,18 +153,17 @@ impl CompletedRequest {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use proptest::prelude::*;
     use crate::schemas::challenge::ChallengeOptions;
+    use proptest::prelude::*;
     proptest! {
         #[test]
         fn test_data_val_payload_generation_range(start in any::<i32>(), len in 1..1000) {
             let end = start + len;
             let rows_to_push = vec![start, end];
-            
+
             let transaction = Transaction {
                 id: None,
                 challenge_id: 0,
@@ -188,7 +185,7 @@ mod tests {
                 generated_payload.items.iter().all(|&x| (start..=end).contains(&x)),
                 "Items {:?} not all within {}..={}", generated_payload.items, start, end
             );
-            
+
             let generated_payload_count = generated_payload.count.unwrap();
             let generated_payload_len = generated_payload.items.len() as i32;
 
@@ -198,5 +195,4 @@ mod tests {
             )
         }
     }
-    
 }

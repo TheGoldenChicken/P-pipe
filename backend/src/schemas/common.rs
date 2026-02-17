@@ -8,9 +8,6 @@ use strum_macros::{EnumCount, EnumIter};
 #[database("postgres_db")]
 pub struct Db(pub sqlx::PgPool);
 
-// Why did we make this Result type??
-// type Result<T, E = rocket::response::Debug<sqlx::Error>> = std::result::Result<T, E>;
-
 #[derive(sqlx::Type, Serialize, Deserialize, Debug, Clone, PartialEq, EnumCount, EnumIter)]
 #[sqlx(type_name = "dispatch_target", rename_all = "snake_case")]
 pub enum DispatchTarget {

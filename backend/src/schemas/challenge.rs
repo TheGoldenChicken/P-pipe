@@ -46,13 +46,11 @@ impl Default for Challenge {
     }
 }
 
-
 #[derive(Serialize, Deserialize, Clone, sqlx::FromRow, Debug, PartialEq)]
 pub struct ChallengeOptions {
     pub possible_request_types: Option<Vec<RequestType>>, // Only allow DataValidation and BatchPrediction
     pub makes_requests_on_transaction_push: Option<bool>,
-    // feature_calculation_requests: Option<Vec<DataValidationPayload>>, // An actual list of CalculatedFeaturePayload objects 
-
+    // feature_calculation_requests: Option<Vec<DataValidationPayload>>, // An actual list of CalculatedFeaturePayload objects
     pub makes_requests_randomly: Option<bool>,
     pub min_time_between_requests: Option<u64>,
     pub max_time_between_requests: Option<u64>,
@@ -60,7 +58,6 @@ pub struct ChallengeOptions {
     pub validate_request_immediately_on_answer: Option<bool>,
     pub allow_retries_on_request: Option<bool>,
     pub return_completed_request_on_student_answer: Option<bool>,
-    
     // pub random_time_between_releases: Option<bool>,
     // pub min_time_between_releases: Option<u64>,
     // pub max_time_between_releases: Option<u64>,

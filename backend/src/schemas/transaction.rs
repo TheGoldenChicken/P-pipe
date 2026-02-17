@@ -1,9 +1,8 @@
 use rocket::serde::{Deserialize, Serialize};
 use sqlx::types::Json;
 
-use super::common::{AccessBinding, DispatchTarget, TransactionStatus};
 use super::challenge::ChallengeOptions;
-
+use super::common::{AccessBinding, DispatchTarget, TransactionStatus};
 
 #[derive(Serialize, Deserialize, Clone, Debug, sqlx::FromRow)]
 pub struct Transaction {

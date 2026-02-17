@@ -1,13 +1,12 @@
 use rocket::serde::json::Json;
-use rocket::{delete, get}; // Have to do this as long as src/lib.rs contains `pub mod endpoints;`, as it breaks #[macro_use]
+use rocket::{delete, get};
 use rocket::{http::Status, response::status::Custom};
 use rocket_db_pools::Connection;
 use sqlx::types::Json as DbJson;
 
+use crate::schemas::challenge::ChallengeOptions;
 use crate::schemas::common::{AccessBinding, Db, DispatchTarget, TransactionStatus};
 use crate::schemas::transaction::{CompletedTransaction, Transaction};
-use crate::schemas::challenge::ChallengeOptions;
-
 
 #[get("/api/transactions")]
 pub async fn get_transactions(
@@ -72,8 +71,6 @@ pub async fn get_completed_transactions(
 
     Ok(Json(transactions))
 }
-
-
 
 #[delete("/api/transactions/<id>")]
 pub async fn delete_transaction(mut db: Connection<Db>, id: i32) -> Result<Status, Custom<String>> {
