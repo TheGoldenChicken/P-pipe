@@ -1,6 +1,5 @@
 import pandas as pd
 
-
 # Helper function suposed to be used in more than one place... Not relevant *right* now
 def df_to_accepted_json(df: pd.DataFrame) -> list[dict]:
     """
@@ -24,7 +23,6 @@ def data_validation_expected_response(transaction: dict, request: dict):
     
     # Get subset of data based on transaction
     source_data_location = transaction['source_data_location']
-
     expected_data_part: pd.DataFrame = pd.read_csv(source_data_location).iloc[rows_to_get]
     items_field: list[dict] = df_to_accepted_json(expected_data_part)
 

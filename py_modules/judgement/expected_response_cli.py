@@ -2,7 +2,7 @@ import click
 import json
 import logging
 
-from expected_response_getter import get_expected_response
+from py_modules.judgement.expected_response_getter import get_expected_response
 
 @click.command()
 @click.option("--request", required=True, help="Generated part request to create rest of request based off of")
