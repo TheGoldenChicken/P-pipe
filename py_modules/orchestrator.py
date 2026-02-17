@@ -20,10 +20,6 @@ def unpack_transaction_json(transaction: str):
         parsed = json.loads(transaction)
     except json.JSONDecodeError as e:
         raise ValueError(f"Invalid JSON: {e}")
-
-    # missing = [field for field in REQUIRED_FIELDS if field not in parsed]
-    # if missing:
-    #     raise ValueError(f"Missing required fields: {', '.join(missing)}")
     
     # Unpack required fields
     id = parsed['id']
@@ -54,16 +50,6 @@ def unpack_transaction_json(transaction: str):
 
     return full_dict_return
 
-
-# def validate_transaction_dict(transaction_dict):
-#     """Validates whether a transaction dict is viable for what it needs to do
-#     And returns the intended purpose (update of permissions, initilization, or data transaction)
-
-#     Args:
-#         transaction_dict (dict): Dictionary of transaction as returned by unpack_transaction_json
-#     """
-
-
 def orchestrator(transaction_dict, local_folder_path=None):
     """TODO: MISSING DOCSTRING
 
@@ -82,8 +68,6 @@ def orchestrator(transaction_dict, local_folder_path=None):
     import pandas as pd
     source_data_location = transaction_dict['source_data_location']
     data_to_from = transaction_dict['rows_to_push']
-    # from pathlib import Path
-    # source_data_location = Path(source_data_location).resolve()
     data_part: pd.DataFrame = pd.read_csv(source_data_location)[data_to_from[0]:data_to_from[1]]
     
     transaction_dict = sanitizer(transaction_dict)
