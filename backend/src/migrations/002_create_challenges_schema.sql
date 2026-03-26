@@ -15,11 +15,9 @@ CREATE TABLE IF NOT EXISTS challenges (
     time_between_releases BIGINT NOT NULL, -- Should be given in millis (utc format)
 
     access_bindings jsonB,
-    challenge_options jsonB NOT NULL
-);    
+    challenge_options jsonB NOT NULL,
 
-CREATE TABLE IF NOT EXISTS test_table (
-    id SERIAL PRIMARY KEY,
-    dispatches_to dispatch_target[] NOT NULL
+    email_body TEXT,
+    recipient_emails TEXT[] NOT NULL DEFAULT '{}',
+    access_types JSONB NOT NULL DEFAULT '[]'
 );    
-

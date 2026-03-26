@@ -7,23 +7,45 @@ use rocket_db_pools::Connection;
 use sqlx::Arguments; // Even though arguments appears unused, it is used in the background (macros perhaps?)
 use sqlx::types::Json as DbJson;
 
+use crate::assigner::test_assume_role::create_bucket_STS_token;
 use crate::schemas::challenge::{Challenge, ChallengeOptions};
-use crate::schemas::common::{AccessBinding, Db, DispatchTarget};
+use crate::schemas::common::{AccessBinding, AccessType, Db, DispatchTarget, AWSSTS};
 use crate::schemas::transaction::Transaction;
+use rocket::State;
+use aws_sdk_sts::Client as StsClient;
 
 #[post("/api/challenges", data = "<challenge>")]
 pub async fn add_challenge(
     mut db: Connection<Db>,
     challenge: Json<Challenge>,
+    sts_client: &State<StsClient>,
 ) -> Result<Json<Vec<Challenge>>, Custom<String>> {
+    let mut access_types: Vec<AccessType> = Vec::new();
+    if challenge.dispatches_to.contains(&DispatchTarget::S3) {
+        let bucket = challenge.init_dataset_location
+            .strip_prefix("s3://")
+            .and_then(|s| s.split('/').next())
+            .ok_or_else(|| Custom(Status::BadRequest, "Could not parse S3 bucket from init_dataset_location".to_string()))?;
+        let creds = create_bucket_STS_token(sts_client, bucket, None)
+            .await
+            .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
+        access_types.push(AccessType::STS(AWSSTS {
+            access_key: creds.access_key_id().to_string(),
+            secret_key: creds.secret_access_key().to_string(),
+            session_token: creds.session_token().to_string(),
+            expires: creds.expiration().secs() as u64,
+        }));
+    }
+    let access_types = DbJson(access_types);
+
     // TODO; Check if we can do this with execute_query?
     let challenge = sqlx::query_as!(
         Challenge,
         r#"
         INSERT INTO challenges
         (challenge_name, init_dataset_location, init_dataset_rows, init_dataset_name,
-        init_dataset_description, dispatches_to, time_of_first_release, release_proportions, time_between_releases, access_bindings, challenge_options)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        init_dataset_description, dispatches_to, time_of_first_release, release_proportions, time_between_releases, access_bindings, challenge_options, email_body, recipient_emails, access_types)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
         RETURNING
             id,
             challenge_name,
@@ -37,7 +59,10 @@ pub async fn add_challenge(
             release_proportions,
             time_between_releases,
             access_bindings as "access_bindings: DbJson<Vec<AccessBinding>>",
-            challenge_options as "challenge_options: DbJson<ChallengeOptions>"
+            challenge_options as "challenge_options: DbJson<ChallengeOptions>",
+            email_body,
+            recipient_emails,
+            access_types as "access_types: DbJson<Vec<AccessType>>"
         "#,
         challenge.challenge_name,
         challenge.init_dataset_location,
@@ -49,7 +74,10 @@ pub async fn add_challenge(
         &challenge.release_proportions,
         challenge.time_between_releases,
         challenge.access_bindings as _,
-        challenge.challenge_options as _
+        challenge.challenge_options as _,
+        challenge.email_body,
+        &challenge.recipient_emails as _,
+        access_types as _
     )
     .fetch_one(&mut **db)
     .await.map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
@@ -206,7 +234,10 @@ pub async fn get_challenges(
             release_proportions,
             time_between_releases,
             access_bindings as "access_bindings: DbJson<Vec<AccessBinding>>",
-            challenge_options as "challenge_options: DbJson<ChallengeOptions>"
+            challenge_options as "challenge_options: DbJson<ChallengeOptions>",
+            email_body,
+            recipient_emails,
+            access_types as "access_types: DbJson<Vec<AccessType>>"
         FROM
             challenges;
         "#
@@ -306,7 +337,10 @@ mod tests {
                 release_proportions: normalized.clone(),
                 time_between_releases: 1,
                 access_bindings: None,
-                challenge_options: DbJson(ChallengeOptions::default())
+                challenge_options: DbJson(ChallengeOptions::default()),
+                email_body: None,
+                recipient_emails: vec![],
+                access_types: DbJson(vec![]),
             };
 
             let transactions = transactions_from_challenge(challenge)
@@ -348,7 +382,7 @@ mod tests {
 
         println!("{:?}", proportions.clone());
         println!("{:?}", dispatch_locations.clone());
-
+        
         let challenge = Challenge {
             id: Some(1),
             challenge_name: "testingchallenge1".into(),
@@ -362,7 +396,10 @@ mod tests {
             release_proportions: proportions,
             time_between_releases: 60,
             access_bindings: None,
-            challenge_options: DbJson(ChallengeOptions::default())
+            challenge_options: DbJson(ChallengeOptions::default()),
+            email_body: None,
+            recipient_emails: vec![],
+            access_types: DbJson(vec![]),
         };
 
         let transactions = transactions_from_challenge(challenge)

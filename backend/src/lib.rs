@@ -1,3 +1,4 @@
+pub mod assigner;
 pub mod endpoints;
 pub mod global_rng;
 pub mod schemas;

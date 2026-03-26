@@ -21,6 +21,39 @@ impl PgHasArrayType for DispatchTarget {
     }
 }
 
+
+#[derive(Debug, Clone)]
+pub struct S3BucketCredentials {
+    pub bucket_name: String,
+    pub access_key: String,
+    pub secret_key: String,
+    pub session_token: String,
+    pub expiry: i64, // use creds.expiration().unwrap().secs() to get to fill this...
+}
+
+
+#[derive(sqlx::Type, Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[sqlx(type_name = "transaction_status_enum", rename_all = "snake_case")]
+pub enum TransactionStatus {
+    Success,
+    SuccessWithStdout,
+    Failed,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(tag = "type")] // This tells serde to use the "type" field to determine the variant
+pub enum AccessType {
+    STS(AWSSTS),
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct AWSSTS {
+    pub access_key: String,
+    pub secret_key: String,
+    pub session_token: String,
+    pub expires: u64
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(tag = "type")] // This tells serde to use the "type" field to determine the variant
 pub enum AccessBinding {
@@ -39,12 +72,4 @@ pub struct DriveBinding {
     pub identity: String,
     pub folder_id: Option<String>,
     pub user_permissions: String, // TODO: Change this to be an enum of all roles in Drive
-}
-
-#[derive(sqlx::Type, Serialize, Deserialize, Debug, Clone, PartialEq)]
-#[sqlx(type_name = "transaction_status_enum", rename_all = "snake_case")]
-pub enum TransactionStatus {
-    Success,
-    SuccessWithStdout,
-    Failed,
 }

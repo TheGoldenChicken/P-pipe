@@ -994,3 +994,23 @@ This might do it for request tests on the scheduler side, though I still need IN
 Nor are we testing that python returns the correct `expected_result` when we call it with Rust (or at all for that matter). But here, I had to make pytests, and I wasn't feeling it. Likewise, we're not doing any testing for the judgement module as a whole. We should do that.
 
 So **testing** is the name of the game before we can finish this... 'sprint', if you wanna call it that.
+
+# 21/03/2026
+
+Worked a bit on giving students access programmatically... AWS is a bitch in that regard. The best way is to use STS, these can only be given by something which assumes a role, even though it would make more sense to have the user itself just have access to the resouces which need giving access to. 
+
+HOWEVER, STS lasts between 15 minutes to 12 hours... The MAX is 12 hours, which is complete and utter bullshit. Are there any other solutions to temporary access that doesn't clog up the IAM roles? No. To this, we CAN do a setup where we give students an endpoint they can call `renew_credentials` which then either gives the old credentials again, or recreates new credentials. I mean this WILL also give them some experience with that, nice. 
+
+There is also the option of relying on **Cognito Identity Pools** (whatever tf that is). This allows one to scope credentials on a per-user basis to their specific bucket, by using IAM policy variables `${cognito-identity.amazonaws.com:sub}`. There is still one IAM for everyone, and the period is at least 1 month. Students also get username/password to login. Essentially, students would access based on this resource 
+```
+"Resource": [
+    "arn:aws:s3:::student-bucket-${cognito-identity.amazonaws.com:sub}",
+    "arn:aws:s3:::student-bucket-${cognito-identity.amazonaws.com:sub}/*"
+]
+```
+
+And that means students can only access buckets based on their own cognito identity, which is shit, since that requires us to name S3 buckets based on that (we can still add whatever else we want to it), and students also need to access based on that. This is more complicated for students, and also adds more technical overhead for us to implement. 
+
+The solution, I think, is to add both options, and ask users which one they wanna use. Right now, however, CIP's have a bit more of a technical overhead because of the whole naming debaucle, since buckets need to be named after the specific CIP, and students therefore also need to access it via that CIP name.
+
+There are still sometimes where tests fail randomly because SQLX does not want to initialize databases correctly as it should. *At some point* we should look into this...

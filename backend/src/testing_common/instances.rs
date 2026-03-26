@@ -34,6 +34,9 @@ pub fn challenge_instance() -> Challenge {
         time_between_releases: 60,
         access_bindings: Some(Json(access_bindings)),
         challenge_options: Json(ChallengeOptions::default()),
+        email_body: None,
+        recipient_emails: vec![],
+        access_types: Json(vec![]),
     }
 }
 
@@ -52,6 +55,9 @@ pub fn minimal_challenge_instance() -> Challenge {
         time_between_releases: 60,
         access_bindings: None,
         challenge_options: Json(ChallengeOptions::default()),
+        email_body: None,
+        recipient_emails: vec![],
+        access_types: Json(vec![]),
     }
 }
 
@@ -71,6 +77,9 @@ pub fn challenge_instance_multiple_dispatch() -> Challenge {
         time_between_releases: 60,
         access_bindings: Some(Json(access_bindings)),
         challenge_options: Json(ChallengeOptions::default()),
+        email_body: None,
+        recipient_emails: vec![],
+        access_types: Json(vec![]),
     }
 }
 

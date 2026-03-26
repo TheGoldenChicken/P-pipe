@@ -1,3 +1,4 @@
+use aws_config::BehaviorVersion;
 use rocket::{Build, Rocket, routes};
 use rocket::{fairing::AdHoc, figment::Figment};
 use rocket_db_pools::Database;
@@ -20,6 +21,11 @@ pub fn rocket_from_config(figment: Figment) -> Rocket<Build> {
     let rocket_build = rocket::custom(figment)
         .attach(Db::init())
         .attach(AdHoc::try_on_ignite("SQLx Migrations", run_migrations))
+        .attach(AdHoc::try_on_ignite("AWS STS Client", |rocket| async {
+            let config = aws_config::load_defaults(BehaviorVersion::latest()).await;
+            let client = aws_sdk_sts::Client::new(&config);
+            Ok(rocket.manage(client))
+        }))
         .mount(
             "/",
             routes![

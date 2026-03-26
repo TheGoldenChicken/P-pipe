@@ -1,7 +1,7 @@
 use rocket::serde::{Deserialize, Serialize};
 use sqlx::types::Json;
 
-use super::common::{AccessBinding, DispatchTarget};
+use super::common::{AccessBinding, AccessType, DispatchTarget};
 use super::request::RequestType;
 
 #[derive(Serialize, Deserialize, Clone, sqlx::FromRow, Debug, PartialEq)]
@@ -24,6 +24,10 @@ pub struct Challenge {
     pub access_bindings: Option<Json<Vec<AccessBinding>>>,
     #[serde(default)]
     pub challenge_options: Json<ChallengeOptions>,
+
+    pub email_body: Option<String>,
+    pub recipient_emails: Vec<String>,
+    pub access_types: Json<Vec<AccessType>>,
 }
 
 impl Default for Challenge {
@@ -42,6 +46,9 @@ impl Default for Challenge {
             time_between_releases: 1000, // 1 day in seconds
             access_bindings: None,
             challenge_options: Json(ChallengeOptions::default()),
+            email_body: None,
+            recipient_emails: vec![],
+            access_types: Json(vec![]),
         }
     }
 }
