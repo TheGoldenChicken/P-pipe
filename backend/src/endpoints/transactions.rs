@@ -1,16 +1,17 @@
 use rocket::serde::json::Json;
 use rocket::{delete, get};
 use rocket::{http::Status, response::status::Custom};
-use rocket_db_pools::Connection;
+use rocket::State;
+use sqlx::PgPool;
 use sqlx::types::Json as DbJson;
 
 use crate::schemas::challenge::ChallengeOptions;
-use crate::schemas::common::{AccessBinding, Db, DispatchTarget, TransactionStatus};
+use crate::schemas::common::{AccessBinding, DispatchTarget, TransactionStatus};
 use crate::schemas::transaction::{CompletedTransaction, Transaction};
 
 #[get("/api/transactions")]
 pub async fn get_transactions(
-    mut db: Connection<Db>,
+    db: &State<PgPool>,
 ) -> Result<Json<Vec<Transaction>>, Custom<String>> {
     let transactions = sqlx::query_as!(
         Transaction,
@@ -31,7 +32,7 @@ pub async fn get_transactions(
             transactions
         "#
     )
-    .fetch_all(&mut **db)
+    .fetch_all(db.inner())
     .await
     .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
 
@@ -40,7 +41,7 @@ pub async fn get_transactions(
 
 #[get("/api/completed_transactions")]
 pub async fn get_completed_transactions(
-    mut db: Connection<Db>,
+    db: &State<PgPool>,
 ) -> Result<Json<Vec<CompletedTransaction>>, Custom<String>> {
     let transactions = sqlx::query_as!(
         CompletedTransaction,
@@ -65,7 +66,7 @@ pub async fn get_completed_transactions(
             completed_transactions
         "#
     )
-    .fetch_all(&mut **db)
+    .fetch_all(db.inner())
     .await
     .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
 
@@ -73,9 +74,9 @@ pub async fn get_completed_transactions(
 }
 
 #[delete("/api/transactions/<id>")]
-pub async fn delete_transaction(mut db: Connection<Db>, id: i32) -> Result<Status, Custom<String>> {
+pub async fn delete_transaction(db: &State<PgPool>, id: i32) -> Result<Status, Custom<String>> {
     sqlx::query!("DELETE FROM transactions WHERE id = $1", id)
-        .execute(&mut **db)
+        .execute(db.inner())
         .await
         .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
 
@@ -83,9 +84,9 @@ pub async fn delete_transaction(mut db: Connection<Db>, id: i32) -> Result<Statu
 }
 
 #[delete("/api/transactions")]
-pub async fn destroy_transactions(mut db: Connection<Db>) -> Result<(), Custom<String>> {
+pub async fn destroy_transactions(db: &State<PgPool>) -> Result<(), Custom<String>> {
     sqlx::query!("DELETE FROM transactions")
-        .execute(&mut **db)
+        .execute(db.inner())
         .await
         .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
     Ok(())

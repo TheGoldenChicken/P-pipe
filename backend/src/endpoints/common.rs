@@ -1,8 +1,5 @@
 use rocket::{Build, Rocket, fairing};
-use rocket_db_pools::Database;
 use std::env;
-
-use crate::schemas::common::Db;
 
 pub async fn run_migrations(rocket: Rocket<Build>) -> fairing::Result {
     let should_migrate = env::var("RUN_MIGRATIONS")
@@ -14,8 +11,8 @@ pub async fn run_migrations(rocket: Rocket<Build>) -> fairing::Result {
         return Ok(rocket);
     }
 
-    match Db::fetch(&rocket) {
-        Some(db) => match sqlx::migrate!("src/migrations").run(&**db).await {
+    match rocket.state::<sqlx::PgPool>() {
+        Some(pool) => match sqlx::migrate!("src/migrations").run(pool).await {
             Ok(_) => Ok(rocket),
             Err(e) => {
                 eprintln!("Failed to initialize SQLx database: {}", e);

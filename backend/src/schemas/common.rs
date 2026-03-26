@@ -1,24 +1,12 @@
 use rocket::serde::{Deserialize, Serialize};
-use rocket_db_pools::Database;
-use sqlx::postgres::{PgHasArrayType, PgTypeInfo};
 
 use strum_macros::{EnumCount, EnumIter};
-
-#[derive(Database)]
-#[database("postgres_db")]
-pub struct Db(pub sqlx::PgPool);
 
 #[derive(sqlx::Type, Serialize, Deserialize, Debug, Clone, PartialEq, EnumCount, EnumIter)]
 #[sqlx(type_name = "dispatch_target", rename_all = "snake_case")]
 pub enum DispatchTarget {
     S3,
     Drive,
-}
-
-impl PgHasArrayType for DispatchTarget {
-    fn array_type_info() -> PgTypeInfo {
-        PgTypeInfo::with_name("dispatch_target[]")
-    }
 }
 
 

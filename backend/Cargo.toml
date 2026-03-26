@@ -16,10 +16,9 @@ rand = "0.9.2"
 rand_pcg = "0.9.0"
 rocket = { version = "0.5.1", features = ["json"] }
 rocket_cors = { version = "0.6.0", default-features = false }
-rocket_db_pools = { version = "0.1", features = ["sqlx_postgres"] }
 serde = { version = "1.0.225", features = ["derive"] }
 serde_json = "1.0.145"
-sqlx = { version = "0.7", features = ["postgres", "runtime-tokio", "macros"] }
+sqlx = { version = "0.8.6", features = ["postgres", "runtime-tokio", "macros"] }
 strum = "0.27.2"
 strum_macros = "0.27.2"
 test-strategy = "0.4.3"
@@ -31,6 +30,8 @@ aws-config = "1"
 aws-sdk-sts = "1"
 lettre = { version = "0.11", features = ["tokio1", "tokio1-native-tls"] }
 
+[package.metadata.sqlx]
+offline = true
 
 [features]
 default = []

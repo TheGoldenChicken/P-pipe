@@ -1,8 +1,4 @@
 use crate::endpoints::dispatcher::rocket_from_config;
-use rocket::figment::{
-    map,
-    value::{Map, Value},
-};
 use rocket::local::asynchronous::Client;
 use sqlx::postgres::PgConnectOptions;
 
@@ -19,12 +15,7 @@ pub async fn async_client_from_pg_connect_options(pg_connect_options: PgConnectO
         pg_connect_options.get_database().unwrap()
     );
 
-    let db_config: Map<_, Value> = map! {
-        "url" => db_url.into(),
-    };
-
-    let figment: rocket::figment::Figment =
-        rocket::Config::figment().merge(("databases", map!["postgres_db" => db_config]));
+    let figment = rocket::Config::figment().merge(("database_url", db_url));
 
     let client = Client::tracked(rocket_from_config(figment))
         .await

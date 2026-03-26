@@ -261,9 +261,8 @@ async fn add_transactions_into_db_basic(pool: sqlx::PgPool) {
     .expect("Could not add challenge to db!");
 
     let transactions = transactions_expected_from_challenge_instance();
-    // TODO: Figure out why the compiler lets us use &mut PoolConnection<Postgres> in place of &mut sqlx::PgConnection....
 
-    let affected = add_transactions_into_db(&mut conn, &transactions)
+    let affected = add_transactions_into_db(&pool, &transactions)
         .await
         .expect("Error while trying to add transactions into db!");
 
@@ -308,9 +307,8 @@ async fn add_transactions_into_db_expected_output(pool: sqlx::PgPool) {
     .expect("Could not add challenge to db!");
 
     let transactions = transactions_expected_from_challenge_instance();
-    // TODO: Figure out why the compiler lets us use &mut PoolConnection<Postgres> in place of &mut sqlx::PgConnection....
 
-    add_transactions_into_db(&mut conn, &transactions)
+    add_transactions_into_db(&pool, &transactions)
         .await
         .expect("Error while trying to add transactions into db!");
 

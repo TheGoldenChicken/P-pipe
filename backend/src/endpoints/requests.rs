@@ -2,20 +2,19 @@ use chrono::Utc;
 use rocket::serde::json::{Json, Value, json};
 use rocket::{delete, get, post, put};
 use rocket::{http::Status, response::status::Custom};
-use rocket_db_pools::Connection;
+use rocket::State;
+use sqlx::PgPool;
 use sqlx::types::Json as DbJson;
 use std::mem::discriminant;
 use std::path::Path;
 use std::process::Command;
-use sqlx::Acquire; // Used for transactions
 
-use crate::schemas::common::Db;
 use crate::schemas::request::{CompletedRequest, Request, RequestStatus, RequestType};
 
 // Admin endpoints
 
 #[get("/api/requests")]
-pub async fn get_requests(mut db: Connection<Db>) -> Result<Json<Vec<Request>>, Custom<String>> {
+pub async fn get_requests(db: &State<PgPool>) -> Result<Json<Vec<Request>>, Custom<String>> {
     let requests = sqlx::query_as!(
         Request,
         r#"
@@ -30,7 +29,7 @@ pub async fn get_requests(mut db: Connection<Db>) -> Result<Json<Vec<Request>>, 
             requests
         "#
     )
-    .fetch_all(&mut **db)
+    .fetch_all(db.inner())
     .await
     .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
 
@@ -41,7 +40,7 @@ pub async fn get_requests(mut db: Connection<Db>) -> Result<Json<Vec<Request>>, 
 // TODO: See if you can't combine this with endpoints/scheduler/insert_request_with_pool... kinda stupid we need both!
 #[post("/api/requests", data = "<request>")]
 pub async fn add_request(
-    mut db: Connection<Db>,
+    db: &State<PgPool>,
     request: Json<Request>,
 ) -> Result<Json<Vec<Request>>, Custom<String>> {
     let _inserted = sqlx::query_as!(
@@ -63,7 +62,7 @@ pub async fn add_request(
         request.expected_response as _,
         request.deadline
     )
-    .fetch_one(&mut **db)
+    .fetch_one(db.inner())
     .await
     .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
 
@@ -71,9 +70,9 @@ pub async fn add_request(
 }
 
 #[delete("/api/requests/<id>")]
-pub async fn delete_request(mut db: Connection<Db>, id: i32) -> Result<Status, Custom<String>> {
+pub async fn delete_request(db: &State<PgPool>, id: i32) -> Result<Status, Custom<String>> {
     sqlx::query!("DELETE FROM requests WHERE id = $1", id)
-        .execute(&mut **db)
+        .execute(db.inner())
         .await
         .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
 
@@ -81,9 +80,9 @@ pub async fn delete_request(mut db: Connection<Db>, id: i32) -> Result<Status, C
 }
 
 #[delete("/api/requests")]
-pub async fn destroy_requests(mut db: Connection<Db>) -> Result<(), Custom<String>> {
+pub async fn destroy_requests(db: &State<PgPool>) -> Result<(), Custom<String>> {
     sqlx::query!("DELETE FROM requests")
-        .execute(&mut **db)
+        .execute(db.inner())
         .await
         .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
     Ok(())
@@ -91,7 +90,7 @@ pub async fn destroy_requests(mut db: Connection<Db>) -> Result<(), Custom<Strin
 
 #[get("/api/completed_requests")]
 pub async fn get_completed_requests(
-    mut db: Connection<Db>,
+    db: &State<PgPool>,
 ) -> Result<Json<Vec<CompletedRequest>>, Custom<String>> {
     let completed_requests = sqlx::query_as!(
         CompletedRequest,
@@ -111,7 +110,7 @@ pub async fn get_completed_requests(
             completed_requests
         "#
     )
-    .fetch_all(&mut **db)
+    .fetch_all(db.inner())
     .await
     .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
 
@@ -120,11 +119,11 @@ pub async fn get_completed_requests(
 
 #[delete("/api/completed_requests/<id>")]
 pub async fn delete_completed_request(
-    mut db: Connection<Db>,
+    db: &State<PgPool>,
     id: i32,
 ) -> Result<Status, Custom<String>> {
     sqlx::query!("DELETE FROM completed_requests WHERE id = $1", id)
-        .execute(&mut **db)
+        .execute(db.inner())
         .await
         .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
 
@@ -132,9 +131,9 @@ pub async fn delete_completed_request(
 }
 
 #[delete("/api/completed_requests")]
-pub async fn destroy_completed_requests(mut db: Connection<Db>) -> Result<(), Custom<String>> {
+pub async fn destroy_completed_requests(db: &State<PgPool>) -> Result<(), Custom<String>> {
     sqlx::query!("DELETE FROM completed_requests")
-        .execute(&mut **db)
+        .execute(db.inner())
         .await
         .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
     Ok(())
@@ -144,7 +143,7 @@ pub async fn destroy_completed_requests(mut db: Connection<Db>) -> Result<(), Cu
 
 #[get("/api/requests/<challenge_id>")]
 pub async fn get_request_student(
-    mut db: Connection<Db>,
+    db: &State<PgPool>,
     challenge_id: i32,
 ) -> Result<Json<rocket::serde::json::Value>, Custom<String>> {
     let requests = sqlx::query_as!(
@@ -164,7 +163,7 @@ pub async fn get_request_student(
         "#,
         &challenge_id
     )
-    .fetch_all(&mut **db)
+    .fetch_all(db.inner())
     .await
     .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
 
@@ -209,7 +208,7 @@ fn _check_request_type_match(request: &RequestType, response: &RequestType) -> R
 
 #[put("/api/requests/<challenge_id>/<request_id>", data = "<response>")]
 pub async fn answer_request_student(
-    mut db: Connection<Db>,
+    db: &State<PgPool>,
     challenge_id: i32,
     request_id: i32,
     // TODO: Potentially use Json<Value> and manually deserialize to return more... holistic error messages to users...
@@ -234,7 +233,7 @@ pub async fn answer_request_student(
         &request_id,
         &challenge_id
     )
-    .fetch_one(&mut **db)
+    .fetch_one(db.inner())
     .await
     .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
 
@@ -300,7 +299,7 @@ pub async fn answer_request_student(
     };
 
     // We use transactions to prevent us from removing requests that don't go through
-    let mut tx = db
+    let mut tx = db.inner()
         .begin()
         .await
         .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;

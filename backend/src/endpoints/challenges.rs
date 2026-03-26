@@ -3,20 +3,20 @@ use rand::seq::IndexedRandom;
 use rocket::serde::json::Json;
 use rocket::{delete, get, post};
 use rocket::{http::Status, response::status::Custom};
-use rocket_db_pools::Connection;
 use sqlx::Arguments; // Even though arguments appears unused, it is used in the background (macros perhaps?)
 use sqlx::types::Json as DbJson;
 
 use crate::assigner::test_assume_role::create_bucket_STS_token;
 use crate::schemas::challenge::{Challenge, ChallengeOptions};
-use crate::schemas::common::{AccessBinding, AccessType, Db, DispatchTarget, AWSSTS};
+use crate::schemas::common::{AccessBinding, AccessType, DispatchTarget, AWSSTS};
 use crate::schemas::transaction::Transaction;
 use rocket::State;
+use sqlx::PgPool;
 use aws_sdk_sts::Client as StsClient;
 
 #[post("/api/challenges", data = "<challenge>")]
 pub async fn add_challenge(
-    mut db: Connection<Db>,
+    db: &State<PgPool>,
     challenge: Json<Challenge>,
     sts_client: &State<StsClient>,
 ) -> Result<Json<Vec<Challenge>>, Custom<String>> {
@@ -79,12 +79,12 @@ pub async fn add_challenge(
         &challenge.recipient_emails as _,
         access_types as _
     )
-    .fetch_one(&mut **db)
+    .fetch_one(db.inner())
     .await.map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
 
     // Generate transactions and add them to the DB
     let generated_transactions = transactions_from_challenge(challenge)?;
-    add_transactions_into_db(&mut db, &generated_transactions).await?;
+    add_transactions_into_db(db.inner(), &generated_transactions).await?;
 
     get_challenges(db).await
 }
@@ -93,8 +93,7 @@ pub async fn add_challenge(
 // TODO IMPORTANT: Really have a good dig into this one, will fail regularly if we don't find a better way of structuring it, and we'll have no idea why it fails...
 // Despite not being an endpoint, this is tested through integration tests, not unittests!
 pub async fn add_transactions_into_db(
-    // db: &mut Connection<Db>,
-    db: &mut sqlx::PgConnection,
+    db: &PgPool,
     transactions: &[Transaction],
 ) -> Result<u64, Custom<String>> {
     if transactions.is_empty() {
@@ -216,7 +215,7 @@ fn transactions_from_challenge(challenge: Challenge) -> Result<Vec<Transaction>,
 
 #[get("/api/challenges")]
 pub async fn get_challenges(
-    mut db: Connection<Db>,
+    db: &State<PgPool>,
 ) -> Result<Json<Vec<Challenge>>, Custom<String>> {
     let challenges = sqlx::query_as!(
         Challenge,
@@ -242,7 +241,7 @@ pub async fn get_challenges(
             challenges;
         "#
     )
-    .fetch_all(&mut **db)
+    .fetch_all(db.inner())
     .await
     .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
 
@@ -250,9 +249,9 @@ pub async fn get_challenges(
 }
 
 #[delete("/api/challenges/<id>")]
-pub async fn delete_challenge(mut db: Connection<Db>, id: i32) -> Result<Status, Custom<String>> {
+pub async fn delete_challenge(db: &State<PgPool>, id: i32) -> Result<Status, Custom<String>> {
     sqlx::query!("DELETE FROM challenges WHERE id = $1", id)
-        .execute(&mut **db)
+        .execute(db.inner())
         .await
         .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
 
@@ -260,9 +259,9 @@ pub async fn delete_challenge(mut db: Connection<Db>, id: i32) -> Result<Status,
 }
 
 #[delete("/api/challenges")]
-pub async fn destroy_challenges(mut db: Connection<Db>) -> Result<Status, Custom<String>> {
+pub async fn destroy_challenges(db: &State<PgPool>) -> Result<Status, Custom<String>> {
     sqlx::query!("DELETE FROM challenges")
-        .execute(&mut **db)
+        .execute(db.inner())
         .await
         .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
 

@@ -8,7 +8,7 @@ use rand;
 use rand::seq::IndexedRandom;
 
 use crate::schemas::challenge::ChallengeOptions;
-use crate::schemas::common::{AccessBinding, Db, DispatchTarget, TransactionStatus};
+use crate::schemas::common::{AccessBinding, DispatchTarget, TransactionStatus};
 use crate::schemas::request::{DataValidationPayload, Request, RequestType};
 use crate::schemas::transaction::{CompletedTransaction, Transaction};
 use crate::global_rng::global_rng;
@@ -293,9 +293,7 @@ pub async fn insert_completed_transaction(
 
 pub fn scheduler_fairing() -> AdHoc {
     AdHoc::on_ignite("Transaction Scheduler", |rocket| async {
-        // We don't use Db<PgPool> here, since connection is only used inside of a request guard
-        let db = rocket.state::<Db>().expect("Db not initialized");
-        let pool = db.0.clone();
+        let pool = rocket.state::<sqlx::PgPool>().expect("PgPool not initialized").clone();
         // TODO: Fix the scheduler completely crapping out on the first failure, it should just move on from it!
         tokio::spawn(async move {
             transaction_scheduler(pool.clone()).await;

@@ -1,10 +1,8 @@
 use aws_config::BehaviorVersion;
 use rocket::{Build, Rocket, routes};
 use rocket::{fairing::AdHoc, figment::Figment};
-use rocket_db_pools::Database;
 use std::env;
 
-use crate::schemas::common::Db;
 use super::challenges::{add_challenge, delete_challenge, destroy_challenges, get_challenges};
 use super::common::run_migrations;
 use super::requests::{
@@ -19,7 +17,19 @@ use super::transactions::{
 
 pub fn rocket_from_config(figment: Figment) -> Rocket<Build> {
     let rocket_build = rocket::custom(figment)
-        .attach(Db::init())
+        .attach(AdHoc::try_on_ignite("Database Pool", |rocket| async {
+            let url = rocket.figment()
+                .extract_inner::<String>("database_url")
+                .or_else(|_| std::env::var("DATABASE_URL"))
+                .expect("DATABASE_URL must be set (via env var or Rocket figment key 'database_url')");
+            match sqlx::PgPool::connect(&url).await {
+                Ok(pool) => Ok(rocket.manage(pool)),
+                Err(e) => {
+                    eprintln!("Failed to connect to database: {}", e);
+                    Err(rocket)
+                }
+            }
+        }))
         .attach(AdHoc::try_on_ignite("SQLx Migrations", run_migrations))
         .attach(AdHoc::try_on_ignite("AWS STS Client", |rocket| async {
             let config = aws_config::load_defaults(BehaviorVersion::latest()).await;
