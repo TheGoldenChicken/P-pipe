@@ -1,12 +1,13 @@
 use rand::Rng;
 use rand::seq::IndexedRandom;
 use rocket::serde::json::Json;
-use rocket::{delete, get, post};
+use rocket::{delete, get, post, put};
+use std::mem::discriminant;
 use rocket::{http::Status, response::status::Custom};
-use sqlx::Arguments; // Even though arguments appears unused, it is used in the background (macros perhaps?)
+use sqlx::QueryBuilder;
 use sqlx::types::Json as DbJson;
 
-use crate::assigner::test_assume_role::create_bucket_STS_token;
+use crate::assigner::assume_role::create_bucket_STS_token;
 use crate::schemas::challenge::{Challenge, ChallengeOptions};
 use crate::schemas::common::{AccessBinding, AccessType, DispatchTarget, AWSSTS};
 use crate::schemas::transaction::Transaction;
@@ -20,24 +21,6 @@ pub async fn add_challenge(
     challenge: Json<Challenge>,
     sts_client: &State<StsClient>,
 ) -> Result<Json<Vec<Challenge>>, Custom<String>> {
-    let mut access_types: Vec<AccessType> = Vec::new();
-    if challenge.dispatches_to.contains(&DispatchTarget::S3) {
-        let bucket = challenge.init_dataset_location
-            .strip_prefix("s3://")
-            .and_then(|s| s.split('/').next())
-            .ok_or_else(|| Custom(Status::BadRequest, "Could not parse S3 bucket from init_dataset_location".to_string()))?;
-        let creds = create_bucket_STS_token(sts_client, bucket, None)
-            .await
-            .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
-        access_types.push(AccessType::STS(AWSSTS {
-            access_key: creds.access_key_id().to_string(),
-            secret_key: creds.secret_access_key().to_string(),
-            session_token: creds.session_token().to_string(),
-            expires: creds.expiration().secs() as u64,
-        }));
-    }
-    let access_types = DbJson(access_types);
-
     // TODO; Check if we can do this with execute_query?
     let challenge = sqlx::query_as!(
         Challenge,
@@ -77,11 +60,41 @@ pub async fn add_challenge(
         challenge.challenge_options as _,
         challenge.email_body,
         &challenge.recipient_emails as _,
-        access_types as _
+        DbJson::<Vec<AccessType>>(vec![]) as _
     )
     .fetch_one(db.inner())
     .await.map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
 
+    // Save what we need before transactions_from_challenge consumes challenge by value
+    let challenge_id = challenge.id.expect("challenge id missing after INSERT RETURNING");
+    let challenge_name = challenge.challenge_name.clone();
+    let dispatches_to = challenge.dispatches_to.clone();
+
+    for dispatch in &dispatches_to {
+        match dispatch {
+            DispatchTarget::S3 => {
+                // let bucket = init_dataset_location.clone();
+                let bucket = format!(
+                    "challenge-{}-{}",
+                    challenge_id, challenge_name
+                );
+                let creds = create_bucket_STS_token(sts_client, &bucket, None)
+                    .await
+                    .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
+                let new_sts = AccessType::STS(AWSSTS {
+                    access_key: creds.access_key_id().to_string(),
+                    secret_key: creds.secret_access_key().to_string(),
+                    session_token: creds.session_token().to_string(),
+                    expires: creds.expiration().secs() as u64,
+                });
+                add_access_type(db, challenge_id, Json(new_sts)).await?;
+            }
+            DispatchTarget::Drive => {}, // TODO: Create Drive credentials
+            _ => {} // TODO Other third locations
+        }
+    }
+
+    // TODO: Move this to be after generating credentials
     // Generate transactions and add them to the DB
     let generated_transactions = transactions_from_challenge(challenge)?;
     add_transactions_into_db(db.inner(), &generated_transactions).await?;
@@ -89,8 +102,7 @@ pub async fn add_challenge(
     get_challenges(db).await
 }
 
-// TODO: Consider if makes sense to have db be anything that implements sqlx::Executor<'c, Database=sqlx::Postgres>
-// TODO IMPORTANT: Really have a good dig into this one, will fail regularly if we don't find a better way of structuring it, and we'll have no idea why it fails...
+
 // Despite not being an endpoint, this is tested through integration tests, not unittests!
 pub async fn add_transactions_into_db(
     db: &PgPool,
@@ -100,7 +112,7 @@ pub async fn add_transactions_into_db(
         return Ok(0);
     }
 
-    let mut query = String::from(
+    let mut builder = QueryBuilder::new(
         "INSERT INTO transactions (
             challenge_id,
             scheduled_time,
@@ -111,43 +123,23 @@ pub async fn add_transactions_into_db(
             dispatch_location,
             access_bindings,
             challenge_options
-        ) VALUES ",
+        ) ",
     );
 
-    let mut args = sqlx::postgres::PgArguments::default();
+    builder.push_values(transactions, |mut b, tx| {
+        b.push_bind(tx.challenge_id)
+            .push_bind(tx.scheduled_time)
+            .push_bind(&tx.source_data_location)
+            .push_bind(&tx.data_intended_location)
+            .push_bind(&tx.data_intended_name)
+            .push_bind(&tx.rows_to_push)
+            .push_bind(&tx.dispatch_location)
+            .push_bind(&tx.access_bindings)
+            .push_bind(&tx.challenge_options);
+    });
 
-    for (i, tx) in transactions.iter().enumerate() {
-        if i > 0 {
-            query.push_str(", ");
-        }
-
-        // TODO: Add a check here to ensure it is properly changed whenever we edit transactions! This has happened too many times already!
-        let base = i * 9;
-        query.push_str(&format!(
-            "(${}, ${}, ${}, ${}, ${}, ${}, ${}, ${}, ${})",
-            base + 1,
-            base + 2,
-            base + 3,
-            base + 4,
-            base + 5,
-            base + 6,
-            base + 7,
-            base + 8,
-            base + 9,
-        ));
-
-        args.add(tx.challenge_id);
-        args.add(tx.scheduled_time);
-        args.add(&tx.source_data_location);
-        args.add(&tx.data_intended_location);
-        args.add(&tx.data_intended_name);
-        args.add(&tx.rows_to_push);
-        args.add(&tx.dispatch_location);
-        args.add(&tx.access_bindings);
-        args.add(&tx.challenge_options);
-    }
-
-    let affected = sqlx::query_with(&query, args)
+    let affected = builder
+        .build()
         .execute(db)
         .await
         .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?
@@ -266,6 +258,150 @@ pub async fn destroy_challenges(db: &State<PgPool>) -> Result<Status, Custom<Str
         .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
 
     Ok(Status::NoContent)
+}
+
+#[put("/api/challenges/<id>/access_type", data = "<access_type>")]
+pub async fn add_access_type(
+    db: &State<PgPool>,
+    id: i32,
+    access_type: Json<AccessType>,
+) -> Result<Json<Challenge>, Custom<String>> {
+    let row = sqlx::query!(
+        r#"SELECT access_types as "access_types: DbJson<Vec<AccessType>>" FROM challenges WHERE id = $1"#,
+        id
+    )
+    .fetch_one(db.inner())
+    .await
+    .map_err(|e| Custom(Status::NotFound, e.to_string()))?;
+
+    let mut access_types = row.access_types.0;
+    access_types.retain(|existing| discriminant(existing) != discriminant(&*access_type));
+    access_types.push(access_type.into_inner());
+    let access_types = DbJson(access_types);
+
+    let challenge = sqlx::query_as!(
+        Challenge,
+        r#"
+        UPDATE challenges SET access_types = $1 WHERE id = $2
+        RETURNING
+            id,
+            challenge_name,
+            created_at,
+            init_dataset_location,
+            init_dataset_rows,
+            init_dataset_name,
+            init_dataset_description,
+            dispatches_to as "dispatches_to: Vec<DispatchTarget>",
+            time_of_first_release,
+            release_proportions,
+            time_between_releases,
+            access_bindings as "access_bindings: DbJson<Vec<AccessBinding>>",
+            challenge_options as "challenge_options: DbJson<ChallengeOptions>",
+            email_body,
+            recipient_emails,
+            access_types as "access_types: DbJson<Vec<AccessType>>"
+        "#,
+        access_types as _,
+        id
+    )
+    .fetch_one(db.inner())
+    .await
+    .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
+
+    Ok(Json(challenge))
+}
+
+#[post("/api/challenges/<id>/regenerate_sts")]
+pub async fn regenerate_sts(
+    db: &State<PgPool>,
+    id: i32,
+    sts_client: &State<StsClient>,
+) -> Result<Json<Challenge>, Custom<String>> {
+    let challenge = sqlx::query_as!(
+        Challenge,
+        r#"
+        SELECT
+            id,
+            challenge_name,
+            created_at,
+            init_dataset_location,
+            init_dataset_rows,
+            init_dataset_name,
+            init_dataset_description,
+            dispatches_to as "dispatches_to: Vec<DispatchTarget>",
+            time_of_first_release,
+            release_proportions,
+            time_between_releases,
+            access_bindings as "access_bindings: DbJson<Vec<AccessBinding>>",
+            challenge_options as "challenge_options: DbJson<ChallengeOptions>",
+            email_body,
+            recipient_emails,
+            access_types as "access_types: DbJson<Vec<AccessType>>"
+        FROM challenges WHERE id = $1
+        "#,
+        id
+    )
+    .fetch_one(db.inner())
+    .await
+    .map_err(|e| Custom(Status::NotFound, e.to_string()))?;
+
+    if !challenge.dispatches_to.contains(&DispatchTarget::S3) {
+        return Err(Custom(
+            Status::BadRequest,
+            "Challenge has no AWS dispatch locations; cannot regenerate STS credentials".to_string(),
+        ));
+    }
+
+    let bucket = challenge.init_dataset_location
+        .strip_prefix("s3://")
+        .and_then(|s| s.split('/').next())
+        .ok_or_else(|| Custom(Status::BadRequest, "Could not parse S3 bucket from init_dataset_location".to_string()))?;
+    let creds = create_bucket_STS_token(sts_client, bucket, None)
+        .await
+        .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
+
+    let new_sts = AccessType::STS(AWSSTS {
+        access_key: creds.access_key_id().to_string(),
+        secret_key: creds.secret_access_key().to_string(),
+        session_token: creds.session_token().to_string(),
+        expires: creds.expiration().secs() as u64,
+    });
+
+    let mut access_types = challenge.access_types.0;
+    access_types.retain(|existing| discriminant(existing) != discriminant(&new_sts));
+    access_types.push(new_sts);
+    let access_types = DbJson(access_types);
+
+    let updated = sqlx::query_as!(
+        Challenge,
+        r#"
+        UPDATE challenges SET access_types = $1 WHERE id = $2
+        RETURNING
+            id,
+            challenge_name,
+            created_at,
+            init_dataset_location,
+            init_dataset_rows,
+            init_dataset_name,
+            init_dataset_description,
+            dispatches_to as "dispatches_to: Vec<DispatchTarget>",
+            time_of_first_release,
+            release_proportions,
+            time_between_releases,
+            access_bindings as "access_bindings: DbJson<Vec<AccessBinding>>",
+            challenge_options as "challenge_options: DbJson<ChallengeOptions>",
+            email_body,
+            recipient_emails,
+            access_types as "access_types: DbJson<Vec<AccessType>>"
+        "#,
+        access_types as _,
+        id
+    )
+    .fetch_one(db.inner())
+    .await
+    .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
+
+    Ok(Json(updated))
 }
 
 #[cfg(test)]
