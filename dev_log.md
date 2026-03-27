@@ -1041,3 +1041,15 @@ Did some stuff with thiserror, since I finally got tired of not being able to se
 Created a single test to run the `create_bucket_STS_token`, which is waaaaaaaaay easier debugging, than having to go through the whole `cargo run`, postman, whatever, steps. Test-driven-development, baby, we must have more of that.
 
 Also ran into small problems with MaxSessionDuration, which was set to 1 hour. This makes sense, since it was on the STS creator thingy (S3 FullAccess), however, the duration is not set through the json itself, which is kind of a problem, I might need either a full command or something to make it fully reproducible for people who just wanna set it up quickly, y'know.
+
+Added a little more later, refactored the way of adding multiple transactions at once to use sqlx::queryBuilder. I don't *exactly* know what this does, will need to read about that.
+
+Also added small test to ensure that the session tokens and whatnot are actually working. It is called from the command line, but it needs to be integrated with the session token creator, or better yet - an actual POST challenge call. So far, it appears to work as it should.
+
+TODO:
+- Challenge start possibilty, so data is not uploaded before actually starting the transaction
+- Make convenience function to remove all AWS S3 buckets right now... We constantly make a lot, right...
+  - Or possibly make like a dry-run thingy only for testing? 
+  - Make function to re-run failed transactions, or to move them to non-completed transactions again
+- Make a pull request to rclone_python about implementing type_remotes
+- Find out why we cannot run other endpoints while transactions are being processed, the two should not interfere with one another
