@@ -27,6 +27,7 @@ pub struct Challenge {
 
     pub email_body: Option<String>,
     pub recipient_emails: Vec<String>,
+    #[serde(default)]
     pub access_types: Json<Vec<AccessType>>,
 }
 
