@@ -1,5 +1,6 @@
-use aws_config::BehaviorVersion;
+use aws_config::{BehaviorVersion, Region};
 use aws_sdk_sts::Client;
+use crate::errors::AwsError;
 
 // TODO: Place these in some kind of env file that user sets up in the beginning
 // ... makes self hosting easier.
@@ -10,7 +11,7 @@ pub async fn create_bucket_STS_token(
     client: &Client,
     bucket_name: &str,
     duration_secs: Option<i32>,
-) -> Result<aws_sdk_sts::types::Credentials, String> {
+) -> Result<aws_sdk_sts::types::Credentials, AwsError> {
     // Scoped to just this one bucket
     // TODO: Potentially remove Delete and Put, students might not need this... or add it as options...
     let session_policy = format!(r#"{{
@@ -25,21 +26,23 @@ pub async fn create_bucket_STS_token(
         }}]
     }}"#, bucket = bucket_name);
 
-    let AWS_account_id = std::env::var("AWS_ACCOUNT_ID").map_err(|e| e.to_string())?;
-    let AWS_access_role_name = std::env::var("AWS_ACCESS_ROLE_NAME").map_err(|e| e.to_string())?;
+    // TODO: See if this cannot be moved to another place... I mean we already do it in main.rs
+    dotenv::dotenv().ok();
+    let AWS_account_id = std::env::var("AWS_ACCOUNT_ID")?;
+    let AWS_access_role_name = std::env::var("AWS_ACCESS_ROLE_NAME")?;
 
     let resp = client
         .assume_role()
         .role_arn(format!("arn:aws:iam::{AWS_account_id}:role/{AWS_access_role_name}"))
         .role_session_name(format!("access-{}", bucket_name))
-        .duration_seconds(duration_secs.unwrap_or(36000))
+        .duration_seconds(duration_secs.unwrap_or(43200))
         .policy(session_policy)  // <-- narrows permissions to this bucket only
         .send()
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
 
-
-    Ok(resp.credentials().unwrap().clone())
+    resp.credentials()
+        .ok_or_else(|| AwsError::AssumeRoleError("AssumeRole response contained no credentials".to_string()))
+        .map(|c| c.clone())
 }
 
 // STS credentials cannot be extended — this issues a fresh set for the same bucket,
@@ -49,7 +52,7 @@ async fn renew_session(
     existing: &aws_sdk_sts::types::Credentials,
     bucket_name: &str,
     duration_secs: i32,
-) -> Result<aws_sdk_sts::types::Credentials, String> {
+) -> Result<aws_sdk_sts::types::Credentials, AwsError> {
     let expiry = existing.expiration().secs();
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -67,7 +70,13 @@ async fn renew_session(
 
 // TODO: Consider if this is actually necessary, or we can do without it...
 pub async fn create_AWS_client() -> aws_sdk_sts::Client {
-    let config = aws_config::load_defaults(BehaviorVersion::latest()).await;
+    dotenv::dotenv().ok();
+    let region = std::env::var("AWS_DEFAULT_REGION")
+        .expect("AWS_DEFAULT_REGION must be set in .env");
+    let config = aws_config::defaults(BehaviorVersion::latest())
+        .region(Region::new(region))
+        .load()
+        .await;
     Client::new(&config)
 }
 
@@ -77,3 +86,15 @@ pub async fn create_AWS_client() -> aws_sdk_sts::Client {
 //     grant_bucket_access(&client, "challenge-1-iris-classification", 3600).await?;
 //     Ok(())
 // }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_create_bucket_sts_token() {
+        let client = create_AWS_client().await;
+        let result = create_bucket_STS_token(&client, "test-bucket", None).await;
+        assert!(result.is_ok(), "Failed to create STS token: {:?}", result.err());
+    }
+}

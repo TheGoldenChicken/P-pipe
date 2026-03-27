@@ -625,6 +625,7 @@ dependencies = [
  "strum",
  "strum_macros",
  "test-strategy",
+ "thiserror",
  "tokio",
  "tokio-postgres",
  "tokio-test",

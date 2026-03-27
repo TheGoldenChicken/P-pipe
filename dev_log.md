@@ -1014,3 +1014,30 @@ And that means students can only access buckets based on their own cognito ident
 The solution, I think, is to add both options, and ask users which one they wanna use. Right now, however, CIP's have a bit more of a technical overhead because of the whole naming debaucle, since buckets need to be named after the specific CIP, and students therefore also need to access it via that CIP name.
 
 There are still sometimes where tests fail randomly because SQLX does not want to initialize databases correctly as it should. *At some point* we should look into this...
+
+
+# 25/03/2026
+
+Did a bunch of stuff. First off, made the assigner/ folder to hold functions to write emails to people (it works if I use my own email, I need to setup an SMTP server for that though), and to generate STS credentials through AWS. 
+
+Initially, I wanted these to be automatically created whenever a challenge is created... however part of the information for STS is the bucket name, which right now depends on the ID of the challenge... which is made by postgres (shit), so cannot be done before the challenge is created. I mean, we can probably query postgres for an id (or down the line, a UUID), but in that case, I think it is better and more flexible to simply have an option that adds STS credentials. 
+
+Also wanted a function to regenerate STS credentials... I don't know if it should be along with functions to generate (so it adds another set of them) or any of that jazz.... Keep it simple stupid, maybe I should start with just having a funciton to regenerate them, and another to insert them. That way, I can create and insert the challenge to the DB, and then immediately afterwards, call those endpoints to give the relevant credentials. I assume there should be a function like `populate_credentials`, that just goes through each of the `dispatch_locations` (maybe add like an `desired_credentials` field, down the line to `challenge_options`), and then generates credentials for each of them, and inserts them all at once. I mean its a vector anyways.
+
+I've also started to think, that maybe it may be better, if I start focusing on the frontend. That should give me a better idea of what features I want to build, which I can then implement in the backend. 
+
+Oh yeah, I also wanted to update sqlx because I wanted sqlx prepare to work, so I could get rid of `query!` errors when I had not spun up the database. Well... this didn't really work initially. I updated to the newest version of sqlx (0.8.6), however, this failed since rocket_db_pools (something from configmonkey, I think), only supports sqlx 0.7.0. Had to update a bunch to 'manually' manage sqlx pools, which really wasn't bad. (Claude did it, I don't know how pools work anyway, so no knowledge lost!)
+
+Also, need to add functionality to "start" a challenge. So each challenge is inactive until it is started. That also would require me to do like a checklist of things to perform beforehand, which can be useful... 
+
+# 26/03/2026
+
+Fucked around a bit to try to find out why the AWS code wouldn't run and perform nicely. Found out that it ran on the laptop because I had logged into AWS there from the console, on my other computer, I had simply forgotten to load the `.env` file... or rather, what was in p-pipe/backend, could not see the .env file in p-pipe/, which makes sense, and was where the AWS credentials were.
+
+Then I fucked around, since apparently I was using an access key (outdated) from p-pipe_aws, instead of p-pipe-rust-user (which was the new one) (remember, id-key pair, determines what user you're logging into, not the ARN, that's the same for every (admin user, not IAM user?)).
+
+Did some stuff with thiserror, since I finally got tired of not being able to see the error apeparing one layer further down, so implemented that, which was nice, and helped a bunch; I mean now I actually have the stack trace. Huzzah, we're going to do that for every error going forward. 
+
+Created a single test to run the `create_bucket_STS_token`, which is waaaaaaaaay easier debugging, than having to go through the whole `cargo run`, postman, whatever, steps. Test-driven-development, baby, we must have more of that.
+
+Also ran into small problems with MaxSessionDuration, which was set to 1 hour. This makes sense, since it was on the STS creator thingy (S3 FullAccess), however, the duration is not set through the json itself, which is kind of a problem, I might need either a full command or something to make it fully reproducible for people who just wanna set it up quickly, y'know.

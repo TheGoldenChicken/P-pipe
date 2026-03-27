@@ -21,8 +21,8 @@ pub async fn send_email(
     let creds = Credentials::new(smtp_user, smtp_password);
 
     let mailer = AsyncSmtpTransport::<Tokio1Executor>::starttls_relay(&smtp_host)
-        .unwrap()
-        .port(smtp_port)
+        .unwrap() // TODO: Remove naked unwraps
+        .port(smtp_port) // TODO Lettere says you don't need to use this... Find out if it is necessary to use
         .credentials(creds)
         .build();
 

@@ -3,7 +3,7 @@ use rocket::{Build, Rocket, routes};
 use rocket::{fairing::AdHoc, figment::Figment};
 use std::env;
 
-use super::challenges::{add_challenge, delete_challenge, destroy_challenges, get_challenges};
+use super::challenges::{add_access_type, add_challenge, delete_challenge, destroy_challenges, get_challenges, regenerate_sts};
 use super::common::run_migrations;
 use super::requests::{
     add_request, answer_request_student, delete_completed_request, delete_request,
@@ -43,6 +43,8 @@ pub fn rocket_from_config(figment: Figment) -> Rocket<Build> {
                 get_challenges,
                 delete_challenge,
                 destroy_challenges,
+                add_access_type,
+                regenerate_sts,
                 get_transactions,
                 get_completed_transactions,
                 delete_transaction,
