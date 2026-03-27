@@ -7,7 +7,7 @@ use rocket::{http::Status, response::status::Custom};
 use sqlx::QueryBuilder;
 use sqlx::types::Json as DbJson;
 
-use crate::assigner::assume_role::create_bucket_STS_token;
+use crate::assigner::assume_role::create_bucket_sts_token;
 use crate::schemas::challenge::{Challenge, ChallengeOptions};
 use crate::schemas::common::{AccessBinding, AccessType, DispatchTarget, AWSSTS};
 use crate::schemas::transaction::Transaction;
@@ -78,7 +78,7 @@ pub async fn add_challenge(
                     "challenge-{}-{}",
                     challenge_id, challenge_name
                 );
-                let creds = create_bucket_STS_token(sts_client, &bucket, None)
+                let creds = create_bucket_sts_token(sts_client, &bucket, None)
                     .await
                     .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
                 let new_sts = AccessType::STS(AWSSTS {
@@ -90,7 +90,6 @@ pub async fn add_challenge(
                 add_access_type(db, challenge_id, Json(new_sts)).await?;
             }
             DispatchTarget::Drive => {}, // TODO: Create Drive credentials
-            _ => {} // TODO Other third locations
         }
     }
 
@@ -356,7 +355,7 @@ pub async fn regenerate_sts(
         .strip_prefix("s3://")
         .and_then(|s| s.split('/').next())
         .ok_or_else(|| Custom(Status::BadRequest, "Could not parse S3 bucket from init_dataset_location".to_string()))?;
-    let creds = create_bucket_STS_token(sts_client, bucket, None)
+    let creds = create_bucket_sts_token(sts_client, bucket, None)
         .await
         .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
 

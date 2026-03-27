@@ -7,7 +7,7 @@ use crate::errors::AwsError;
 // const AWS_ACCOUNT_ID: &str = "739275472501";
 // const AWS_ACCESS_ROLE_NAME: &str = "S3TempAccessRole";
 
-pub async fn create_bucket_STS_token(
+pub async fn create_bucket_sts_token(
     client: &Client,
     bucket_name: &str,
     duration_secs: Option<i32>,
@@ -28,12 +28,12 @@ pub async fn create_bucket_STS_token(
 
     // TODO: See if this cannot be moved to another place... I mean we already do it in main.rs
     dotenv::dotenv().ok();
-    let AWS_account_id = std::env::var("AWS_ACCOUNT_ID")?;
-    let AWS_access_role_name = std::env::var("AWS_ACCESS_ROLE_NAME")?;
+    let aws_account_id = std::env::var("AWS_ACCOUNT_ID")?;
+    let aws_access_role_name = std::env::var("AWS_ACCESS_ROLE_NAME")?;
 
     let resp = client
         .assume_role()
-        .role_arn(format!("arn:aws:iam::{AWS_account_id}:role/{AWS_access_role_name}"))
+        .role_arn(format!("arn:aws:iam::{aws_account_id}:role/{aws_access_role_name}"))
         .role_session_name(format!("access-{}", bucket_name))
         .duration_seconds(duration_secs.unwrap_or(43200))
         .policy(session_policy)  // <-- narrows permissions to this bucket only
@@ -45,6 +45,7 @@ pub async fn create_bucket_STS_token(
         .map(|c| c.clone())
 }
 
+// TODO: Make logs available to user, not as println!
 // STS credentials cannot be extended — this issues a fresh set for the same bucket,
 // which the caller should use to replace the expiring ones.
 async fn renew_session(
@@ -65,11 +66,11 @@ async fn renew_session(
     }
 
     println!("Renewing session for bucket '{}'...", bucket_name);
-    create_bucket_STS_token(client, bucket_name, Some(duration_secs)).await
+    create_bucket_sts_token(client, bucket_name, Some(duration_secs)).await
 }
 
 // TODO: Consider if this is actually necessary, or we can do without it...
-pub async fn create_AWS_client() -> aws_sdk_sts::Client {
+pub async fn create_aws_client() -> aws_sdk_sts::Client {
     dotenv::dotenv().ok();
     let region = std::env::var("AWS_DEFAULT_REGION")
         .expect("AWS_DEFAULT_REGION must be set in .env");
@@ -80,21 +81,14 @@ pub async fn create_AWS_client() -> aws_sdk_sts::Client {
     Client::new(&config)
 }
 
-// #[tokio::main]
-// async fn main() -> Result<(), aws_sdk_sts::Error> {
-//     let client = create_AWS_client();
-//     grant_bucket_access(&client, "challenge-1-iris-classification", 3600).await?;
-//     Ok(())
-// }
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[tokio::test]
     async fn test_create_bucket_sts_token() {
-        let client = create_AWS_client().await;
-        let result = create_bucket_STS_token(&client, "test-bucket", None).await;
+        let client = create_aws_client().await;
+        let result = create_bucket_sts_token(&client, "test-bucket", None).await;
         assert!(result.is_ok(), "Failed to create STS token: {:?}", result.err());
     }
 }
