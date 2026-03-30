@@ -14,7 +14,6 @@ CREATE TABLE IF NOT EXISTS challenges (
     release_proportions DOUBLE PRECISION[] NOT NULL,
     time_between_releases BIGINT NOT NULL, -- Should be given in millis (utc format)
 
-    access_bindings jsonB,
     challenge_options jsonB NOT NULL,
 
     email_body TEXT,

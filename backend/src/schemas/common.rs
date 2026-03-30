@@ -42,22 +42,3 @@ pub struct AWSSTS {
     pub expires: u64
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-#[serde(tag = "type")] // This tells serde to use the "type" field to determine the variant
-pub enum AccessBinding {
-    S3(S3Binding),
-    Drive(DriveBinding),
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub struct S3Binding {
-    pub identity: String,
-    pub bucket: String,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub struct DriveBinding {
-    pub identity: String,
-    pub folder_id: Option<String>,
-    pub user_permissions: String, // TODO: Change this to be an enum of all roles in Drive
-}

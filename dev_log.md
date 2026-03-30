@@ -1046,6 +1046,13 @@ Added a little more later, refactored the way of adding multiple transactions at
 
 Also added small test to ensure that the session tokens and whatnot are actually working. It is called from the command line, but it needs to be integrated with the session token creator, or better yet - an actual POST challenge call. So far, it appears to work as it should.
 
+
+# 30/03/2026
+
+Clauded access_bindings away from everything (tests still pass, so I trust it). Though, after doing it, I was reminded that it may be better to keep such refactors to a separate branch in the future...
+
+Started working on a `streamlit_frontend_2.py`, not really supposed to be a final version of the frontend, that should be built in node or smth, but should inform what kind of backend features we will work on...
+
 TODO:
 - Challenge start possibilty, so data is not uploaded before actually starting the transaction
 - Make convenience function to remove all AWS S3 buckets right now... We constantly make a lot, right...
@@ -1054,3 +1061,5 @@ TODO:
 - Make a pull request to rclone_python about implementing type_remotes
 - Find out why we cannot run other endpoints while transactions are being processed, the two should not interfere with one another
 - Remove access_bindings from entire codebase - They don't actually do anything...
+
+

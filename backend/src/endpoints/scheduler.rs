@@ -8,7 +8,7 @@ use rand;
 use rand::seq::IndexedRandom;
 
 use crate::schemas::challenge::ChallengeOptions;
-use crate::schemas::common::{AccessBinding, DispatchTarget, TransactionStatus};
+use crate::schemas::common::{DispatchTarget, TransactionStatus};
 use crate::schemas::request::{DataValidationPayload, Request, RequestType};
 use crate::schemas::transaction::{CompletedTransaction, Transaction};
 use crate::global_rng::global_rng;
@@ -187,7 +187,6 @@ async fn run_scheduler_iteration(pool: &sqlx::PgPool) -> Result<(), Custom<Strin
             data_intended_location,
             data_intended_name,
             rows_to_push,
-            access_bindings as "access_bindings: Json<Vec<AccessBinding>>",
             challenge_options as "challenge_options: Json<ChallengeOptions>"
         "#,
         now
@@ -260,14 +259,13 @@ pub async fn insert_completed_transaction(
             data_intended_location,
             data_intended_name,
             rows_to_push,
-            access_bindings,
             challenge_options,
             attempted_at,
             transaction_status,
             stdout,
             stderr
         ) VALUES (
-            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
         )
         "#,
         tx.challenge_id,
@@ -278,7 +276,6 @@ pub async fn insert_completed_transaction(
         tx.data_intended_location,
         tx.data_intended_name,
         tx.rows_to_push.as_deref(),
-        tx.access_bindings as _,
         tx.challenge_options as _,
         tx.attempted_at,
         tx.transaction_status.clone() as TransactionStatus,

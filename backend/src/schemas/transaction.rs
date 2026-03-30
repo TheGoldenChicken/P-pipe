@@ -2,7 +2,7 @@ use rocket::serde::{Deserialize, Serialize};
 use sqlx::types::Json;
 
 use super::challenge::ChallengeOptions;
-use super::common::{AccessBinding, DispatchTarget, TransactionStatus};
+use super::common::{DispatchTarget, TransactionStatus};
 
 #[derive(Serialize, Deserialize, Clone, Debug, sqlx::FromRow)]
 pub struct Transaction {
@@ -19,7 +19,6 @@ pub struct Transaction {
     pub data_intended_name: Option<String>,
     pub rows_to_push: Option<Vec<i32>>,
 
-    pub access_bindings: Option<Json<Vec<AccessBinding>>>,
     pub challenge_options: Json<ChallengeOptions>,
 }
 
@@ -31,7 +30,6 @@ impl PartialEq for Transaction {
             && self.source_data_location == other.source_data_location
             && self.data_intended_location == other.data_intended_location
             && self.rows_to_push == other.rows_to_push
-            && self.access_bindings == other.access_bindings
     }
 }
 
@@ -48,7 +46,6 @@ pub struct CompletedTransaction {
     pub data_intended_name: Option<String>,
     pub rows_to_push: Option<Vec<i32>>,
 
-    pub access_bindings: Option<Json<Vec<AccessBinding>>>,
     pub challenge_options: Json<ChallengeOptions>,
 
     // Status fields - for completed transactions
@@ -76,7 +73,6 @@ impl CompletedTransaction {
             data_intended_location: tx.data_intended_location,
             data_intended_name: tx.data_intended_name,
             rows_to_push: tx.rows_to_push,
-            access_bindings: tx.access_bindings,
             challenge_options: tx.challenge_options,
             attempted_at,
             transaction_status,

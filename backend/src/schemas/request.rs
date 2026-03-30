@@ -174,7 +174,6 @@ mod tests {
                 data_intended_location: "challenge_42_testingchallenge1".into(),
                 data_intended_name: None,
                 rows_to_push: Some(rows_to_push),
-                access_bindings: None,
                 challenge_options: Json(ChallengeOptions::default())
             };
 

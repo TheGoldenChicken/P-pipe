@@ -23,15 +23,6 @@ def test_valid_transaction():
     #     "data_intended_location": "challenge_42_testingchallenge1",
     #     "data_intended_name": "release_2",
     #     "rows_to_push": [210, 300],
-    #     "access_bindings": [
-    #         {"type": "S3", "identity": "ec2userstuff", "bucket": "somebucket"},
-    #         {
-    #             "type": "Drive",
-    #             "identity": "dderpson99@gmail.com",
-    #             "folder_id": "abcd123",
-    #             "user_permissions": "Read",
-    #         },
-    #     ],
     # })
 
     result = unpack_transaction_json(tx_json)
@@ -39,8 +30,6 @@ def test_valid_transaction():
     assert result["challenge_id"] == 42
     assert result["scheduled_time"] == 1120
     assert result["rows_to_push"] == [210, 300]
-    assert result["access_bindings"][0]["type"] == "S3"
-    assert result["access_bindings"][1]["identity"] == "dderpson99@gmail.com"
 
 @pytest.fixture(params=[
     "transaction_instance_s3.json",

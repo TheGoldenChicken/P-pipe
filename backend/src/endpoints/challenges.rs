@@ -9,7 +9,7 @@ use sqlx::types::Json as DbJson;
 
 use crate::assigner::assume_role::create_bucket_sts_token;
 use crate::schemas::challenge::{Challenge, ChallengeOptions};
-use crate::schemas::common::{AccessBinding, AccessType, DispatchTarget, AWSSTS};
+use crate::schemas::common::{AccessType, DispatchTarget, AWSSTS};
 use crate::schemas::transaction::Transaction;
 use rocket::State;
 use sqlx::PgPool;
@@ -27,8 +27,8 @@ pub async fn add_challenge(
         r#"
         INSERT INTO challenges
         (challenge_name, init_dataset_location, init_dataset_rows, init_dataset_name,
-        init_dataset_description, dispatches_to, time_of_first_release, release_proportions, time_between_releases, access_bindings, challenge_options, email_body, recipient_emails, access_types)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        init_dataset_description, dispatches_to, time_of_first_release, release_proportions, time_between_releases, challenge_options, email_body, recipient_emails, access_types)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
         RETURNING
             id,
             challenge_name,
@@ -41,7 +41,6 @@ pub async fn add_challenge(
             time_of_first_release,
             release_proportions,
             time_between_releases,
-            access_bindings as "access_bindings: DbJson<Vec<AccessBinding>>",
             challenge_options as "challenge_options: DbJson<ChallengeOptions>",
             email_body,
             recipient_emails,
@@ -56,7 +55,6 @@ pub async fn add_challenge(
         challenge.time_of_first_release,
         &challenge.release_proportions,
         challenge.time_between_releases,
-        challenge.access_bindings as _,
         challenge.challenge_options as _,
         challenge.email_body,
         &challenge.recipient_emails as _,
@@ -120,7 +118,6 @@ pub async fn add_transactions_into_db(
             data_intended_name,
             rows_to_push,
             dispatch_location,
-            access_bindings,
             challenge_options
         ) ",
     );
@@ -133,7 +130,6 @@ pub async fn add_transactions_into_db(
             .push_bind(&tx.data_intended_name)
             .push_bind(&tx.rows_to_push)
             .push_bind(&tx.dispatch_location)
-            .push_bind(&tx.access_bindings)
             .push_bind(&tx.challenge_options);
     });
 
@@ -194,7 +190,6 @@ fn transactions_from_challenge(challenge: Challenge) -> Result<Vec<Transaction>,
                 ),
                 data_intended_name: Some(format!("release_{}", i)),
                 rows_to_push: Some(rows_to_push.clone()),
-                access_bindings: challenge.access_bindings.clone(),
                 challenge_options: challenge.challenge_options.clone(),
             };
             transactions.push(transaction);
@@ -223,7 +218,6 @@ pub async fn get_challenges(
             time_of_first_release,
             release_proportions,
             time_between_releases,
-            access_bindings as "access_bindings: DbJson<Vec<AccessBinding>>",
             challenge_options as "challenge_options: DbJson<ChallengeOptions>",
             email_body,
             recipient_emails,
@@ -294,7 +288,6 @@ pub async fn add_access_type(
             time_of_first_release,
             release_proportions,
             time_between_releases,
-            access_bindings as "access_bindings: DbJson<Vec<AccessBinding>>",
             challenge_options as "challenge_options: DbJson<ChallengeOptions>",
             email_body,
             recipient_emails,
@@ -331,7 +324,6 @@ pub async fn regenerate_sts(
             time_of_first_release,
             release_proportions,
             time_between_releases,
-            access_bindings as "access_bindings: DbJson<Vec<AccessBinding>>",
             challenge_options as "challenge_options: DbJson<ChallengeOptions>",
             email_body,
             recipient_emails,
@@ -387,7 +379,6 @@ pub async fn regenerate_sts(
             time_of_first_release,
             release_proportions,
             time_between_releases,
-            access_bindings as "access_bindings: DbJson<Vec<AccessBinding>>",
             challenge_options as "challenge_options: DbJson<ChallengeOptions>",
             email_body,
             recipient_emails,
@@ -470,7 +461,6 @@ mod tests {
                 time_of_first_release: 0,
                 release_proportions: normalized.clone(),
                 time_between_releases: 1,
-                access_bindings: None,
                 challenge_options: DbJson(ChallengeOptions::default()),
                 email_body: None,
                 recipient_emails: vec![],
@@ -529,7 +519,6 @@ mod tests {
             time_of_first_release: 1000,
             release_proportions: proportions,
             time_between_releases: 60,
-            access_bindings: None,
             challenge_options: DbJson(ChallengeOptions::default()),
             email_body: None,
             recipient_emails: vec![],

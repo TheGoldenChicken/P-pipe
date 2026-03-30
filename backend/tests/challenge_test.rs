@@ -4,13 +4,16 @@ use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use sqlx::types::Json as DbJson;
 
 use backend::schemas::challenge::{Challenge, ChallengeOptions};
-use backend::schemas::common::{AccessBinding, DispatchTarget};
+use backend::schemas::common::DispatchTarget;
 use backend::schemas::transaction::Transaction;
 use backend::endpoints::challenges::add_transactions_into_db;
 use backend::testing_common::connect::async_client_from_pg_connect_options;
 use backend::testing_common::instances::{
     challenge_instance, minimal_challenge_instance, transactions_expected_from_challenge_instance,
 };
+
+// TODO: Important fix the "unprocessable entity due to semantic errors"
+// ... should be more informative in general
 
 // TODO: To make testing less brittle, have standard common functions for stuff like INSERT, SELECT sql statements...
 // ... perhaps also use these in the endpoints themselves, to have some sort of standardization...
@@ -67,8 +70,8 @@ async fn challenge_get_basic(
         INSERT INTO challenges
         (challenge_name, init_dataset_location, init_dataset_rows, init_dataset_name,
         init_dataset_description, dispatches_to, time_of_first_release, release_proportions,
-        time_between_releases, access_bindings, challenge_options)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        time_between_releases, challenge_options)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
         "#,
         challenge.challenge_name,
         challenge.init_dataset_location,
@@ -79,7 +82,6 @@ async fn challenge_get_basic(
         challenge.time_of_first_release,
         &challenge.release_proportions,
         challenge.time_between_releases,
-        challenge.access_bindings as _,
         challenge.challenge_options as _,
     )
     .execute(&pool)
@@ -125,8 +127,8 @@ async fn challenge_delete_basic(
         INSERT INTO challenges
         (id, challenge_name, init_dataset_location, init_dataset_rows, init_dataset_name,
         init_dataset_description, dispatches_to, time_of_first_release, release_proportions,
-        time_between_releases, access_bindings, challenge_options)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        time_between_releases, challenge_options)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
         "#,
         1,
         challenge.challenge_name,
@@ -138,7 +140,6 @@ async fn challenge_delete_basic(
         challenge.time_of_first_release,
         &challenge.release_proportions,
         challenge.time_between_releases,
-        challenge.access_bindings as _,
         challenge.challenge_options as _,
     )
     .execute(&pool)
@@ -185,8 +186,8 @@ async fn challenge_destroy_all(
             INSERT INTO challenges
             (id, challenge_name, init_dataset_location, init_dataset_rows, init_dataset_name,
             init_dataset_description, dispatches_to, time_of_first_release, release_proportions,
-            time_between_releases, access_bindings, challenge_options)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            time_between_releases, challenge_options)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
             "#,
         )
         .bind(i)
@@ -199,7 +200,6 @@ async fn challenge_destroy_all(
         .bind(challenge.time_of_first_release)
         .bind(&challenge.release_proportions)
         .bind(challenge.time_between_releases)
-        .bind(&challenge.access_bindings)
         .bind(&challenge.challenge_options)
         .execute(&pool)
         .await?;
@@ -240,8 +240,8 @@ async fn add_transactions_into_db_basic(pool: sqlx::PgPool) {
         INSERT INTO challenges
         (id, challenge_name, init_dataset_location, init_dataset_rows, init_dataset_name,
         init_dataset_description, dispatches_to, time_of_first_release, release_proportions,
-        time_between_releases, access_bindings, challenge_options)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        time_between_releases, challenge_options)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
         "#,
         challenge.id,
         challenge.challenge_name,
@@ -253,7 +253,6 @@ async fn add_transactions_into_db_basic(pool: sqlx::PgPool) {
         challenge.time_of_first_release,
         &challenge.release_proportions,
         challenge.time_between_releases,
-        challenge.access_bindings as _,
         challenge.challenge_options as _
     )
     .execute(&mut *conn)
@@ -286,8 +285,8 @@ async fn add_transactions_into_db_expected_output(pool: sqlx::PgPool) {
         INSERT INTO challenges
         (id, challenge_name, init_dataset_location, init_dataset_rows, init_dataset_name,
         init_dataset_description, dispatches_to, time_of_first_release, release_proportions,
-        time_between_releases, access_bindings, challenge_options)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        time_between_releases, challenge_options)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
         "#,
         challenge.id,
         challenge.challenge_name,
@@ -299,7 +298,6 @@ async fn add_transactions_into_db_expected_output(pool: sqlx::PgPool) {
         challenge.time_of_first_release,
         &challenge.release_proportions,
         challenge.time_between_releases,
-        challenge.access_bindings as _,
         challenge.challenge_options as _
     )
     .execute(&mut *conn)
@@ -325,9 +323,8 @@ async fn add_transactions_into_db_expected_output(pool: sqlx::PgPool) {
             data_intended_location,
             data_intended_name,
             rows_to_push,
-            access_bindings as "access_bindings: DbJson<Vec<AccessBinding>>",
             challenge_options as "challenge_options: DbJson<ChallengeOptions>"
-        FROM 
+        FROM
             transactions
         "#
     )

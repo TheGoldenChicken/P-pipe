@@ -6,7 +6,7 @@ use sqlx::PgPool;
 use sqlx::types::Json as DbJson;
 
 use crate::schemas::challenge::ChallengeOptions;
-use crate::schemas::common::{AccessBinding, DispatchTarget, TransactionStatus};
+use crate::schemas::common::{DispatchTarget, TransactionStatus};
 use crate::schemas::transaction::{CompletedTransaction, Transaction};
 
 #[get("/api/transactions")]
@@ -26,7 +26,6 @@ pub async fn get_transactions(
             data_intended_location,
             data_intended_name,
             rows_to_push,
-            access_bindings as "access_bindings: DbJson<Vec<AccessBinding>>",
             challenge_options as "challenge_options: DbJson<ChallengeOptions>"
         FROM 
             transactions
@@ -56,7 +55,6 @@ pub async fn get_completed_transactions(
             data_intended_location,
             data_intended_name,
             rows_to_push,
-            access_bindings as "access_bindings: DbJson<Vec<AccessBinding>>",
             challenge_options as "challenge_options: DbJson<ChallengeOptions>",
             attempted_at,
             transaction_status as "transaction_status: TransactionStatus",

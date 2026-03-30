@@ -10,18 +10,5 @@
   "rows_to_push": [
     210,
     300
-  ],
-  "access_bindings": [
-    {
-      "type": "S3",
-      "identity": "ec2userstuff",
-      "bucket": "somebucket"
-    },
-    {
-      "type": "Drive",
-      "identity": "dderpson99@gmail.com",
-      "folder_id": "abcd123",
-      "user_permissions": "Read"
-    }
   ]
 }

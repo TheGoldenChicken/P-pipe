@@ -33,7 +33,6 @@ def unpack_transaction_json(transaction: str):
     data_intended_location = parsed.get('data_intended_location')
     data_intended_name = parsed.get('data_intended_name')
     rows_to_push = parsed.get('rows_to_push')
-    access_bindings = parsed.get('access_bindings')
 
     full_dict_return = {
         'id': id,
@@ -45,8 +44,7 @@ def unpack_transaction_json(transaction: str):
         'data_intended_location': data_intended_location, # ACTUALLY USED
         'data_intended_name': data_intended_name, # ACTUALLY USED
         'rows_to_push': rows_to_push, # ACTUALLY USED
-        'access_bindings': access_bindings
-    }    
+    }
 
     return full_dict_return
 
@@ -145,25 +143,6 @@ if __name__ == "__main__":
     #     "rows_to_push": [
     #         0,
     #         150
-    #     ],
-    #     "access_bindings": [
-    #         {
-    #             "type": "S3",
-    #             "identity": "arn:aws:iam::123456789012:user/alice",
-    #             "bucket": "ml-challenges"
-    #         },
-    #         {
-    #             "type": "Drive",
-    #             "identity": "user:bob@example.com",
-    #             "folder_id": "abc123",
-    #             "user_permissions": "editor"
-    #         },
-    #         {
-    #             "type": "Drive",
-    #             "identity": "user:carol@example.com",
-    #             "folder_id": None,
-    #             "user_permissions": "viewer"
-    #         }
     #     ]
     # }
 
@@ -179,25 +158,6 @@ $ python py_modules/orchestrator.py orchestrator-cli --transaction '{
   "dispatch_location": "S3",
   "data_intended_location": "challenge1testingchallenge1",
   "data_intended_name": "release_0",
-  "rows_to_push": [0, 150],
-  "access_bindings": [
-    {
-      "type": "S3",
-      "identity": "arn:aws:iam::123456789012:user/alice",
-      "bucket": "ml-challenges"
-    },
-    {
-      "type": "Drive",
-      "identity": "user:bob@example.com",
-      "folder_id": "abc123",
-      "user_permissions": "editor"
-    },
-    {
-      "type": "Drive",
-      "identity": "user:carol@example.com",
-      "folder_id": null,
-      "user_permissions": "viewer"
-    }
-  ]
+  "rows_to_push": [0, 150]
 }'
 """
