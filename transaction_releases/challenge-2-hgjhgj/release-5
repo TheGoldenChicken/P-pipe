@@ -1,0 +1,16 @@
+,sepal.length,sepal.width,petal.length,petal.width,variety
+75,6.6,3.0,4.4,1.4,Versicolor
+76,6.8,2.8,4.8,1.4,Versicolor
+77,6.7,3.0,5.0,1.7,Versicolor
+78,6.0,2.9,4.5,1.5,Versicolor
+79,5.7,2.6,3.5,1.0,Versicolor
+80,5.5,2.4,3.8,1.1,Versicolor
+81,5.5,2.4,3.7,1.0,Versicolor
+82,5.8,2.7,3.9,1.2,Versicolor
+83,6.0,2.7,5.1,1.6,Versicolor
+84,5.4,3.0,4.5,1.5,Versicolor
+85,6.0,3.4,4.5,1.6,Versicolor
+86,6.7,3.1,4.7,1.5,Versicolor
+87,6.3,2.3,4.4,1.3,Versicolor
+88,5.6,3.0,4.1,1.3,Versicolor
+89,5.5,2.5,4.0,1.3,Versicolor

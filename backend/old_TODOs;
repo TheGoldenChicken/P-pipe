@@ -1,0 +1,32 @@
+
+// TODO: Add check to challenges; check if no two identical dispatches_to locations
+
+// TODO: Add some sort of checking to ensure if transactions.rows_to_push it is actually a 'range'? - Not enforced in any other way, I mean...
+// ... can be done through making a custom constructor transactions::new() and having the function there...
+// ... not good, since most creating those structs logic is done through implicit means
+// ... transactions::new would never be called explicitly
+
+// TODO: Consider if it makes sense to use a static migrator to avoid re-parsing the migrations each time
+// static MIGRATOR: Migrator = sqlx::migrate!("backend/migrations");
+
+// TODO: Consider if we should do away with the whole Custom<String> Type and instead just use tokio_postgres::Error?
+// TODO: Consider if we should look into a way of having custom return messages... what if we want to show both challenges affected, AND transactions?
+
+// TODO: Add checks to add_challenge to see if release options makes sense:
+// - do release proportions sum to 1?
+// - Are any release proportions above 1?
+// - Is time of first release already passed?
+// - Is time between releases a fair number?
+
+// TODO: Consider if add_challenge should even return all challenges when added, might be kinda bad...
+
+// TODO: Consider better ways of making add_transactions_into_db. It is VERY fragile right now...
+// ... and doesn't respond at all well to changes in the db schema...
+
+// TODO: Make unit-test testing transactions_from_challenge for correct behavior!
+
+// TODO: Possibly make a wrapper struct around Challenges which is PostgresChallenge. This is to make AccessBindings be 
+// For now, we can make due with writing this, whenever we need to use a Vec<AccessBinding>  access_bindings: c.access_bindings.map(|json| json.0)
+// *Might* not make sense, tho. Since we have to pass AccessBindings back and forth to and from postgres, and at each point, it must be wrapped in sqlx::types::Json<>
+
+// TODO: Consider if it even makes sense to have this here, we use it in more places, but it is also so little code, sooooooo?

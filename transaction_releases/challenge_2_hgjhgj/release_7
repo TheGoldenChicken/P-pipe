@@ -1,0 +1,16 @@
+,sepal.length,sepal.width,petal.length,petal.width,variety
+105,7.6,3.0,6.6,2.1,Virginica
+106,4.9,2.5,4.5,1.7,Virginica
+107,7.3,2.9,6.3,1.8,Virginica
+108,6.7,2.5,5.8,1.8,Virginica
+109,7.2,3.6,6.1,2.5,Virginica
+110,6.5,3.2,5.1,2.0,Virginica
+111,6.4,2.7,5.3,1.9,Virginica
+112,6.8,3.0,5.5,2.1,Virginica
+113,5.7,2.5,5.0,2.0,Virginica
+114,5.8,2.8,5.1,2.4,Virginica
+115,6.4,3.2,5.3,2.3,Virginica
+116,6.5,3.0,5.5,1.8,Virginica
+117,7.7,3.8,6.7,2.2,Virginica
+118,7.7,2.6,6.9,2.3,Virginica
+119,6.0,2.2,5.0,1.5,Virginica
