@@ -70,6 +70,7 @@ pub fn rocket_from_config(figment: Figment) -> Rocket<Build> {
     if cfg!(not(test)) && attach_scheduler {
         println!("Attaching scheduler fairing");
         rocket_build.attach(scheduler_fairing())
+        // TODO: Sometimes warns: "relation "_sqlx_migrations" already exists, skipping" find out why
     } else {
         eprintln!(
             "ATTACH_SCHEDULER either false, not set, or this is a test. No scheduler fairing attached"
