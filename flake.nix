@@ -83,10 +83,6 @@
               # pytest's pythonpath=["."] assumes the same. See dev_log.md.
               export PYTHONPATH="$PWD''${PYTHONPATH:+:$PYTHONPATH}"
 
-              # Matches backend/Rocket.toml and backend/compose.yml. .env wins if set,
-              # since the backend calls dotenv() before reading these.
-              export DATABASE_URL="''${DATABASE_URL:-postgres://postgres:postgres@localhost:5432/postgres}"
-
               echo "p-pipe dev shell — rustc $(rustc --version | cut -d' ' -f2), $(uv --version)"
               echo "  db: docker compose -f backend/compose.yml up -d   (sqlx query! macros need it at COMPILE time)"
             '';
