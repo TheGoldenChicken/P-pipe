@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM challenges",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "b9b0f8e52d3f2ce577029bf6359e754ead9cc9589b6b4c2c872d3b51e4aa6fc5"
+}

@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            id,\n            challenge_id,\n            created_at,\n            type_of_request as \"type_of_request: DbJson<RequestType>\",\n            expected_response as \"expected_response: DbJson<RequestType>\",\n            deadline\n        FROM \n            requests\n        WHERE\n            challenge_id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "challenge_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "created_at",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "type_of_request: DbJson<RequestType>",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 4,
+        "name": "expected_response: DbJson<RequestType>",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 5,
+        "name": "deadline",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "5ccf5c806293b85ca80466deffbfcaf1f727e3722184e29049ab41c5b0f0f015"
+}

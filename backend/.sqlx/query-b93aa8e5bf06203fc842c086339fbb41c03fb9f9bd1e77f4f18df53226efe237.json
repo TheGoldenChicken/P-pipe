@@ -1,0 +1,124 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE challenges SET access_types = $1 WHERE id = $2\n        RETURNING\n            id,\n            challenge_name,\n            created_at,\n            init_dataset_location,\n            init_dataset_rows,\n            init_dataset_name,\n            init_dataset_description,\n            dispatches_to as \"dispatches_to: Vec<DispatchTarget>\",\n            time_of_first_release,\n            release_proportions,\n            time_between_releases,\n            challenge_options as \"challenge_options: DbJson<ChallengeOptions>\",\n            email_body,\n            recipient_emails,\n            access_types as \"access_types: DbJson<Vec<AccessType>>\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "challenge_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "created_at",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "init_dataset_location",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "init_dataset_rows",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "init_dataset_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "init_dataset_description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "dispatches_to: Vec<DispatchTarget>",
+        "type_info": {
+          "Custom": {
+            "name": "dispatch_target[]",
+            "kind": {
+              "Array": {
+                "Custom": {
+                  "name": "dispatch_target",
+                  "kind": {
+                    "Enum": [
+                      "s3",
+                      "drive"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "time_of_first_release",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 9,
+        "name": "release_proportions",
+        "type_info": "Float8Array"
+      },
+      {
+        "ordinal": 10,
+        "name": "time_between_releases",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 11,
+        "name": "challenge_options: DbJson<ChallengeOptions>",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 12,
+        "name": "email_body",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 13,
+        "name": "recipient_emails",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 14,
+        "name": "access_types: DbJson<Vec<AccessType>>",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Jsonb",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "b93aa8e5bf06203fc842c086339fbb41c03fb9f9bd1e77f4f18df53226efe237"
+}

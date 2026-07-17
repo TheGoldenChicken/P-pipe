@@ -1,0 +1,84 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            id,\n            challenge_id,\n            created_at,\n            scheduled_time,\n            source_data_location,\n            dispatch_location as \"dispatch_location: DispatchTarget\",\n            data_intended_location,\n            data_intended_name,\n            rows_to_push,\n            challenge_options as \"challenge_options: DbJson<ChallengeOptions>\"\n        FROM \n            transactions\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "challenge_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "created_at",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "scheduled_time",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "source_data_location",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "dispatch_location: DispatchTarget",
+        "type_info": {
+          "Custom": {
+            "name": "dispatch_target",
+            "kind": {
+              "Enum": [
+                "s3",
+                "drive"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "data_intended_location",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "data_intended_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "rows_to_push",
+        "type_info": "Int4Array"
+      },
+      {
+        "ordinal": 9,
+        "name": "challenge_options: DbJson<ChallengeOptions>",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      true,
+      true,
+      false,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "a294a9f9e8b862c9f35007632ded6d63d4244e5fd46de1d52c400846b2294708"
+}

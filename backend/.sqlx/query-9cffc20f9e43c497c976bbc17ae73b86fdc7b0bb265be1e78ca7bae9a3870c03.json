@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT access_types as \"access_types: DbJson<Vec<AccessType>>\" FROM challenges WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "access_types: DbJson<Vec<AccessType>>",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "9cffc20f9e43c497c976bbc17ae73b86fdc7b0bb265be1e78ca7bae9a3870c03"
+}

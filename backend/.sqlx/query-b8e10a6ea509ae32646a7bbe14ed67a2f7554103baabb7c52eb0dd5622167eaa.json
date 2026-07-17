@@ -1,0 +1,119 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            id,\n            challenge_id,\n            created_at,\n            scheduled_time,\n            source_data_location,\n            dispatch_location as \"dispatch_location: DispatchTarget\",\n            data_intended_location,\n            data_intended_name,\n            rows_to_push,\n            challenge_options as \"challenge_options: DbJson<ChallengeOptions>\",\n            attempted_at,\n            transaction_status as \"transaction_status: TransactionStatus\",\n            stdout,\n            stderr\n        FROM \n            completed_transactions\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "challenge_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "created_at",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "scheduled_time",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "source_data_location",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "dispatch_location: DispatchTarget",
+        "type_info": {
+          "Custom": {
+            "name": "dispatch_target",
+            "kind": {
+              "Enum": [
+                "s3",
+                "drive"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "data_intended_location",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "data_intended_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "rows_to_push",
+        "type_info": "Int4Array"
+      },
+      {
+        "ordinal": 9,
+        "name": "challenge_options: DbJson<ChallengeOptions>",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 10,
+        "name": "attempted_at",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 11,
+        "name": "transaction_status: TransactionStatus",
+        "type_info": {
+          "Custom": {
+            "name": "transaction_status_enum",
+            "kind": {
+              "Enum": [
+                "success",
+                "failed",
+                "success_stdout_present"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 12,
+        "name": "stdout",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 13,
+        "name": "stderr",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      true,
+      true,
+      false,
+      true,
+      true,
+      false,
+      true,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "b8e10a6ea509ae32646a7bbe14ed67a2f7554103baabb7c52eb0dd5622167eaa"
+}
