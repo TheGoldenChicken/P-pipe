@@ -1063,3 +1063,33 @@ TODO:
 - Remove access_bindings from entire codebase - They don't actually do anything...
 
 
+# 17/07/2026
+
+Didn't really do much work today, but had a lot of ideas. 
+
+First, made (or had Claude make, from now on, *made* can just as well mean "I asked the AI to do it", I won't repeat myself regarding this) a nix flake to make installing dependencies slightly less of a pain. Still have to make a way of starting the database, running migrations, preparing files, etc. But for now this is alright. Also, did an `cargo sqlx prepare`, which creates to commit a .sqlx folder with schemas, so sqlx works without a live version of the database.
+
+Also had some issues with testing, the `create_STS_token` test was failing, and that fucked up the other tests, since they would never run. The real solution here is running `cargo test --features deterministic --no-fail-fast`, since otherwise, rust'll "fail fast", and stop after the first failing test, which is not desirable.
+
+After that, asked Claude to come up with ideas for improvements and implementatinos of the whole thing, namely the assigner/dispatcher relation. It had a few ideas that were stupid (authentication for endpoints (not necessary yet)), no groups or students table (there are emails (though groups and students for users on the website may be useful later)). As well as 'make some latch so the data becomes unavailable if the backend crashes' - not understanding that the backend should be as supremely detached from the students accessing of data as possible.
+
+The real good shit it came up was the following:
+
+- Switch to using prefixes over S3 buckets (thought I had covered this)
+- Implement rust traits to handle giving access to data sources
+- Switch to fsspec or OpenDAL instead of Rclone
+- Rclone is used in a non-reproducible way (configuration file lives outside of the git repo) - Claude was also sassy about this: *"...accounts, two regions), and remote selection is invisible to your database. And rclone's config lives in ~/.config/rclone/rclone.conf, ambient state outside your app and outside your DB — which is precisely the non-reproducibility you're trying to teach students to avoid. There's a certain irony in an MLOps teaching platform depending on undeclared machine-local config"*, well, there may be a solutionf or this.
+
+Prefixes appear the clear choice, they lose one thing, which is that when you have to delete a prefix, you have to empty the thing first, but that can easily be done via  loop after a challenge ends. There must also be done some security stuff with the IAM role permissions to keep students from sniffing each other's data, but that can be done. There is also one downside which I didn't find until now, as Claude puts it: *"S3 is path-addressed, Drive is ID-addressed. data_intended_location: String can't express both. rclone papers over this by maintaining its own path→ID resolution — that's the real cost of dropping it, and it's a schema change, not a library choice. Matches your own TODO at orchestrator.py:7."*, I don't quite get this now, and it may be the reason for my earlier choice of buckets over prefixes, but I'm too tired to find out now...
+
+The trait thing is genius, and I don't know why I didn't think of it before (hint: I don't understand Rust traits (hint hint: I'm a complete moron)). 
+
+In regards to fsspec and OpenDAL, Claude kinda thought that the main thing was S3, when it is just the main example. Well, fsspec is more of a filesystem than an actual package like rclone, which means it doesn't really work for what we need. You *can* technically read S3 files with it and `s3fs`, but go to gdrive, and you're shit out of luck.
+
+OpenDAL is rust, which is nice, and that would kill the whole subprocess problems we've been having issues with, and it would kill the Python side of the project (yay), and it would make errors easier to parse (yay!!!!), but it is not as mature (awww). Also, it would require some finagling just to get the whole thing on Rust... and rclone is supremely mature compared to OpenDAL. There may be arguments for OpenDAL, since it is an actual package and not just a subprocess wrapper, masquerading as a package.... But still. Think I'll stick to rclone for now... but the biggest argument to switch is the way it handles errors on account of it being a subprocess. 
+
+Now, with Claude, there may be an argument to switch to writing everything myself, including code to copy data to different locations... That would be in line with me having to write read-code, and give-access code myself anyways, but we'll see. 
+
+The funniest thing would be if this turns out to become a competitor to rclone tool. I'm probably grossly underestimating how supremely difficult that would be.
+
+Next time, I'll look into switching to S3 prefixes and the whole trait thing to give access. With maybe a small devops side of making this *whole* thing slightly more reproducible, by among other things, having the rclone config file somewhere else...
