@@ -1093,3 +1093,5 @@ Now, with Claude, there may be an argument to switch to writing everything mysel
 The funniest thing would be if this turns out to become a competitor to rclone tool. I'm probably grossly underestimating how supremely difficult that would be.
 
 Next time, I'll look into switching to S3 prefixes and the whole trait thing to give access. With maybe a small devops side of making this *whole* thing slightly more reproducible, by among other things, having the rclone config file somewhere else...
+
+Oh yeah: We also thought to have our postman tests somehow be synchronized with the Github repo... that would be nice, don't know if it is possible... but more reproduciability!
