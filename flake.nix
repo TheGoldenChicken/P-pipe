@@ -58,6 +58,9 @@
               # --- Runtime deps the code shells out to ---
               pkgs.rclone # rclone-python drives this binary; no binary, no dispatch
               pkgs.docker-compose # backend/compose.yml (needs a daemon from your NixOS config)
+
+              # --- AWS ops: create the deployment bucket, inspect STS/prefixes ---
+              pkgs.awscli2
             ];
 
             env = {
