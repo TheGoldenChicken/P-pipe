@@ -171,7 +171,7 @@ mod tests {
                 scheduled_time: 1120,
                 source_data_location: Some("../py_modules/tests/test_data/iris.csv".into()),
                 dispatch_location: None,
-                data_intended_location: "challenge_42_testingchallenge1".into(),
+                data_intended_location: "p-pipe-test/challenge-42".into(),
                 data_intended_name: None,
                 rows_to_push: Some(rows_to_push),
                 challenge_options: Json(ChallengeOptions::default())

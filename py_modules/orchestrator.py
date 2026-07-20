@@ -67,8 +67,6 @@ def orchestrator(transaction_dict, local_folder_path=None):
     source_data_location = transaction_dict['source_data_location']
     data_to_from = transaction_dict['rows_to_push']
     data_part: pd.DataFrame = pd.read_csv(source_data_location)[data_to_from[0]:data_to_from[1]]
-    
-    transaction_dict = sanitizer(transaction_dict)
 
     data_intended_location = transaction_dict['data_intended_location']
     import os
@@ -83,20 +81,6 @@ def orchestrator(transaction_dict, local_folder_path=None):
     rclone_functions.rclone_copy_file(full_data_part_path, 
                                       rclone_remote_name=rclone_remote,
                                       folder_name=data_intended_location)
-
-def sanitizer(transaction_dict):
-    """TEMP SANITIZER
-    TODO: MAKE ACTUALLY BETTER...
-
-    Args:
-        transaction_dict (_type_): _description_
-    """
-
-    if transaction_dict['dispatch_location'].lower() == "s3":
-        transaction_dict['data_intended_location'] = transaction_dict['data_intended_location'].replace("_", "-")
-        transaction_dict['data_intended_name'] = transaction_dict['data_intended_name'].replace("_", "-") 
-
-    return transaction_dict
 
 def make_dir(transaction_dict):
     dispatch_location = transaction_dict['dispatch_location']
@@ -138,7 +122,7 @@ if __name__ == "__main__":
     #     "scheduled_time": 5000,
     #     "source_data_location": "/home/cicero/ppipe/py_modules/tests/test_data/iris.csv",
     #     "dispatch_location": "S3",
-    #     "data_intended_location": "challenge_1_testingchallenge1",
+    #     "data_intended_location": "p-pipe-prod/challenge-1",
     #     "data_intended_name": "release_0",
     #     "rows_to_push": [
     #         0,
@@ -156,7 +140,7 @@ $ python py_modules/orchestrator.py orchestrator-cli --transaction '{
   "scheduled_time": 5000,
   "source_data_location": "/home/cicero/ppipe/py_modules/tests/test_data/iris.csv",
   "dispatch_location": "S3",
-  "data_intended_location": "challenge1testingchallenge1",
+  "data_intended_location": "p-pipe-prod/challenge-1",
   "data_intended_name": "release_0",
   "rows_to_push": [0, 150]
 }'

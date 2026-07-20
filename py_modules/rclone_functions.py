@@ -43,12 +43,18 @@ def rclone_copy_file(upload_file_path: str, rclone_remote_name: str, folder_name
 
 
 def rclone_init_dir(folder_name: str, rclone_remote_name: str):
-    """TODO: MISSING DOCSTRING
+    """Creates a directory on the remote, if the backend has real directories.
+
+    This is a no-op for object stores like S3 (prefixes are implicit and the
+    bucket is pre-created), but meaningful for "third locations" that do have
+    directories — Drive, FTP, WebDAV, SFTP, etc.
 
     Args:
-        dirname (str): _description_
-        rclone_remote_name (str): _description_
+        folder_name (str): path of the directory to create on the remote.
+        rclone_remote_name (str): name of the rclone remote (e.g. "myremote:").
     """
 
-    rclone.mkdir(folder_name, rclone_remote_name)
+    rclone_full_remote = rclone_remote_name + folder_name
+
+    rclone.mkdir(rclone_full_remote)
 

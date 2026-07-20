@@ -65,18 +65,17 @@ pub async fn add_challenge(
 
     // Save what we need before transactions_from_challenge consumes challenge by value
     let challenge_id = challenge.id.expect("challenge id missing after INSERT RETURNING");
-    let challenge_name = challenge.challenge_name.clone();
     let dispatches_to = challenge.dispatches_to.clone();
 
     for dispatch in &dispatches_to {
         match dispatch {
             DispatchTarget::S3 => {
-                // let bucket = init_dataset_location.clone();
-                let bucket = format!(
-                    "challenge-{}-{}",
-                    challenge_id, challenge_name
-                );
-                let creds = create_bucket_sts_token(sts_client, &bucket, None)
+                // TODO: Potentially read the bucket from env first time this runs so we can rely on a constant or smth instead... 
+                let bucket = std::env::var("P_PIPE_S3_BUCKET").map_err(|e| {
+                    Custom(Status::InternalServerError, format!("P_PIPE_S3_BUCKET not set: {e}"))
+                })?;
+                let prefix = format!("challenge-{}", challenge_id);
+                let creds = create_bucket_sts_token(sts_client, &bucket, &prefix, None)
                     .await
                     .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
                 let new_sts = AccessType::STS(AWSSTS {
@@ -177,6 +176,19 @@ fn transactions_from_challenge(challenge: Challenge) -> Result<Vec<Transaction>,
 
         // TODO: We can avoid unecessary cloning by using shuffling with .drain(..n)
         for item in dispatch_locations.cloned() {
+            // For S3 the bucket is embedded here so the transaction is fully
+            // self-contained (README's "atomic transaction" goal), and it is
+            // built with hyphens so nothing downstream needs to sanitise it.
+            let data_intended_location = match &item {
+                DispatchTarget::S3 => {
+                    let bucket = std::env::var("P_PIPE_S3_BUCKET").map_err(|e| {
+                        Custom(Status::InternalServerError, format!("P_PIPE_S3_BUCKET not set: {e}"))
+                    })?;
+                    format!("{}/challenge-{}", bucket, challenge_id)
+                }
+                DispatchTarget::Drive => format!("challenge-{}", challenge_id),
+            };
+
             let transaction = Transaction {
                 id: None,
                 challenge_id: challenge_id,
@@ -184,10 +196,7 @@ fn transactions_from_challenge(challenge: Challenge) -> Result<Vec<Transaction>,
                 scheduled_time,
                 source_data_location: Some(challenge.init_dataset_location.clone()),
                 dispatch_location: Some(item),
-                data_intended_location: format!(
-                    "challenge_{}_{}",
-                    challenge_id, challenge.challenge_name
-                ),
+                data_intended_location,
                 data_intended_name: Some(format!("release_{}", i)),
                 rows_to_push: Some(rows_to_push.clone()),
                 challenge_options: challenge.challenge_options.clone(),
@@ -343,11 +352,11 @@ pub async fn regenerate_sts(
         ));
     }
 
-    let bucket = challenge.init_dataset_location
-        .strip_prefix("s3://")
-        .and_then(|s| s.split('/').next())
-        .ok_or_else(|| Custom(Status::BadRequest, "Could not parse S3 bucket from init_dataset_location".to_string()))?;
-    let creds = create_bucket_sts_token(sts_client, bucket, None)
+    let bucket = std::env::var("P_PIPE_S3_BUCKET").map_err(|e| {
+        Custom(Status::InternalServerError, format!("P_PIPE_S3_BUCKET not set: {e}"))
+    })?;
+    let prefix = format!("challenge-{}", id);
+    let creds = create_bucket_sts_token(sts_client, &bucket, &prefix, None)
         .await
         .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
 

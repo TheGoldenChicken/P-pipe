@@ -5,7 +5,7 @@
   "scheduled_time": 1120,
   "source_data_location": "s3://bucket/data.csv",
   "dispatch_location": "S3",
-  "data_intended_location": "challenge_42_testingchallenge1",
+  "data_intended_location": "p-pipe-test/challenge-42",
   "data_intended_name": "release_2",
   "rows_to_push": [
     210,
