@@ -1095,3 +1095,17 @@ The funniest thing would be if this turns out to become a competitor to rclone t
 Next time, I'll look into switching to S3 prefixes and the whole trait thing to give access. With maybe a small devops side of making this *whole* thing slightly more reproducible, by among other things, having the rclone config file somewhere else...
 
 Oh yeah: We also thought to have our postman tests somehow be synchronized with the Github repo... that would be nice, don't know if it is possible... but more reproduciability!
+
+Also, we need a better way of getting the dbs up and down, and ensuring we keep data in either case
+
+# 20/07/2026
+
+Look into encrypted secrtes commited to flake, decrypted at activation, kinda what sops-nix or agenix does...
+
+Finalized the change to prefixes. I'm getting a little bit of cold feet about it, mostly because students will know the name of the bucket, and there *must* be some way in which they can use that information to fuck with it, right? Otherwise, might be able to keep one bucket per challenge group or teacher profile or something. That might be a better way of structuring things.
+
+Also re-added rclone remotes, didn't think of that before. There must be some better of adding them than the "kinda-in-the-flake-but-also-a-little-in-the-rclone.conf-file-at-the-same-time-that-is-really-stupid"-method
+
+Looked into adding postman stuff to git, that was more complicated than I thought, or I'm just stupid.
+
+Later, will look into the giving access with traits stuff...
