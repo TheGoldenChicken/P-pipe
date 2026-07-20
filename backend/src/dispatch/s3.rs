@@ -1,6 +1,15 @@
-use aws_config::{BehaviorVersion, Region};
-use aws_sdk_sts::Client;
+//! S3 implementation of the control plane (`AccessBackend`), together with the
+//! STS primitives it builds on (moved here from the former
+//! `assigner::assume_role`, which is where all S3/STS logic now lives).
+
+use std::time::Duration;
+
+use async_trait::async_trait;
+use aws_sdk_sts::Client as StsClient;
+
+use super::{AccessBackend, AccessError, Location, Principal};
 use crate::errors::AwsError;
+use crate::schemas::common::{AWSSTS, AccessType, DispatchTarget};
 
 // TODO: Place these in some kind of env file that user sets up in the beginning
 // ... makes self hosting easier.
@@ -17,7 +26,7 @@ use crate::errors::AwsError;
 ///
 /// TODO: Potentially remove Delete and Put, students might not need this... or add it as options...
 pub async fn create_bucket_sts_token(
-    client: &Client,
+    client: &StsClient,
     bucket_name: &str,
     prefix: &str,
     duration_secs: Option<i32>,
@@ -55,7 +64,7 @@ pub async fn create_bucket_sts_token(
     let aws_access_role_name = std::env::var("AWS_ACCESS_ROLE_NAME")?;
 
     // TODO: Potentially return error here if they set duration longer than possible, clamp doesn't tell them about the error...
-    let duration_secs = duration_secs.unwrap_or(43200).clamp(900, 43200); 
+    let duration_secs = duration_secs.unwrap_or(43200).clamp(900, 43200);
 
     let session_name = format!("access-{}", prefix.replace('/', "-"));
 
@@ -77,7 +86,7 @@ pub async fn create_bucket_sts_token(
 // STS credentials cannot be extended — this issues a fresh set for the same bucket,
 // which the caller should use to replace the expiring ones.
 async fn renew_session(
-    client: &Client,
+    client: &StsClient,
     existing: &aws_sdk_sts::types::Credentials,
     bucket_name: &str,
     prefix: &str,
@@ -98,17 +107,66 @@ async fn renew_session(
     create_bucket_sts_token(client, bucket_name, prefix, Some(duration_secs)).await
 }
 
-// TODO: Consider if this is actually necessary, or we can do without it...
-pub async fn create_aws_client() -> aws_sdk_sts::Client {
-    dotenv::dotenv().ok();
-    let region = std::env::var("AWS_DEFAULT_REGION")
-        .expect("AWS_DEFAULT_REGION must be set in .env");
-    let config = aws_config::defaults(BehaviorVersion::latest())
-        .region(Region::new(region))
-        .load()
-        .await;
-    Client::new(&config)
+/// STS-backed access for a single shared S3 bucket. Isolation is per-prefix,
+/// enforced by the session policy built in `create_bucket_sts_token`.
+pub struct S3Access {
+    client: StsClient,
 }
+
+impl S3Access {
+    pub fn new(client: StsClient) -> Self {
+        Self { client }
+    }
+}
+
+#[async_trait]
+impl AccessBackend for S3Access {
+    fn target(&self) -> DispatchTarget {
+        DispatchTarget::S3
+    }
+
+    async fn grant(
+        &self,
+        loc: &Location,
+        _who: &Principal,
+        ttl: Duration,
+    ) -> Result<AccessType, AccessError> {
+        // create_bucket_sts_token clamps to STS's legal 900..=43200; cap here
+        // only to keep the u64 -> i32 cast safe.
+        let duration_secs = ttl.as_secs().min(43_200) as i32;
+
+        let creds =
+            create_bucket_sts_token(&self.client, &loc.root, &loc.prefix, Some(duration_secs))
+                .await?;
+
+        Ok(AccessType::STS(AWSSTS {
+            access_key: creds.access_key_id().to_string(),
+            secret_key: creds.secret_access_key().to_string(),
+            session_token: creds.session_token().to_string(),
+            expires: creds.expiration().secs() as u64,
+        }))
+    }
+
+    async fn revoke(&self, _grant: &AccessType) -> Result<(), AccessError> {
+        // STS session credentials cannot be revoked individually — the only
+        // lever is a role-wide deny on aws:TokenIssueTime, which kills every
+        // active session at once and so is not a per-grant operation.
+        Err(AccessError::Unsupported)
+    }
+}
+
+
+// // TODO: Consider if this is actually necessary, or we can do without it...
+// pub async fn create_aws_client() -> aws_sdk_sts::Client {
+//     dotenv::dotenv().ok();
+//     let region = std::env::var("AWS_DEFAULT_REGION")
+//         .expect("AWS_DEFAULT_REGION must be set in .env");
+//     let config = aws_config::defaults(BehaviorVersion::latest())
+//         .region(Region::new(region))
+//         .load()
+//         .await;
+//     StsClient::new(&config)
+// }
 
 
 // TODO: Fix this test running

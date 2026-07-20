@@ -7,19 +7,27 @@ use rocket::{http::Status, response::status::Custom};
 use sqlx::QueryBuilder;
 use sqlx::types::Json as DbJson;
 
-use crate::assigner::assume_role::create_bucket_sts_token;
+use std::time::Duration;
+
+use crate::dispatch::{AccessBackend, Location, Principal};
 use crate::schemas::challenge::{Challenge, ChallengeOptions};
-use crate::schemas::common::{AccessType, DispatchTarget, AWSSTS};
+use crate::schemas::common::{AccessType, DispatchTarget};
 use crate::schemas::transaction::Transaction;
 use rocket::State;
 use sqlx::PgPool;
-use aws_sdk_sts::Client as StsClient;
+
+/// Default lifetime for a minted grant. STS caps at 12h; `grant` clamps to that.
+const GRANT_TTL: Duration = Duration::from_secs(43_200);
+
+/// The control-plane backend endpoints depend on. Managed at ignite (see
+/// `dispatcher::rocket_from_config`); today it is always the S3 implementation.
+type Access = Box<dyn AccessBackend>;
 
 #[post("/api/challenges", data = "<challenge>")]
 pub async fn add_challenge(
     db: &State<PgPool>,
     challenge: Json<Challenge>,
-    sts_client: &State<StsClient>,
+    access: &State<Access>,
 ) -> Result<Json<Vec<Challenge>>, Custom<String>> {
     // TODO; Check if we can do this with execute_query?
     let challenge = sqlx::query_as!(
@@ -70,21 +78,18 @@ pub async fn add_challenge(
     for dispatch in &dispatches_to {
         match dispatch {
             DispatchTarget::S3 => {
-                // TODO: Potentially read the bucket from env first time this runs so we can rely on a constant or smth instead... 
+                // TODO: Potentially read the bucket from env first time this runs so we can rely on a constant or smth instead...
                 let bucket = std::env::var("P_PIPE_S3_BUCKET").map_err(|e| {
                     Custom(Status::InternalServerError, format!("P_PIPE_S3_BUCKET not set: {e}"))
                 })?;
-                let prefix = format!("challenge-{}", challenge_id);
-                let creds = create_bucket_sts_token(sts_client, &bucket, &prefix, None)
+                // TODO: Potentially have a way to write TTL in the data of the challenge being submitted...
+                let loc = Location { root: bucket, prefix: format!("challenge-{}", challenge_id) };
+                let who = Principal { challenge_id, emails: challenge.recipient_emails.clone() };
+                let grant = access
+                    .grant(&loc, &who, GRANT_TTL)
                     .await
                     .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
-                let new_sts = AccessType::STS(AWSSTS {
-                    access_key: creds.access_key_id().to_string(),
-                    secret_key: creds.secret_access_key().to_string(),
-                    session_token: creds.session_token().to_string(),
-                    expires: creds.expiration().secs() as u64,
-                });
-                add_access_type(db, challenge_id, Json(new_sts)).await?;
+                add_access_type(db, challenge_id, Json(grant)).await?;
             }
             DispatchTarget::Drive => {}, // TODO: Create Drive credentials
         }
@@ -176,9 +181,6 @@ fn transactions_from_challenge(challenge: Challenge) -> Result<Vec<Transaction>,
 
         // TODO: We can avoid unecessary cloning by using shuffling with .drain(..n)
         for item in dispatch_locations.cloned() {
-            // For S3 the bucket is embedded here so the transaction is fully
-            // self-contained (README's "atomic transaction" goal), and it is
-            // built with hyphens so nothing downstream needs to sanitise it.
             let data_intended_location = match &item {
                 DispatchTarget::S3 => {
                     let bucket = std::env::var("P_PIPE_S3_BUCKET").map_err(|e| {
@@ -316,7 +318,7 @@ pub async fn add_access_type(
 pub async fn regenerate_sts(
     db: &State<PgPool>,
     id: i32,
-    sts_client: &State<StsClient>,
+    access: &State<Access>,
 ) -> Result<Json<Challenge>, Custom<String>> {
     let challenge = sqlx::query_as!(
         Challenge,
@@ -355,17 +357,12 @@ pub async fn regenerate_sts(
     let bucket = std::env::var("P_PIPE_S3_BUCKET").map_err(|e| {
         Custom(Status::InternalServerError, format!("P_PIPE_S3_BUCKET not set: {e}"))
     })?;
-    let prefix = format!("challenge-{}", id);
-    let creds = create_bucket_sts_token(sts_client, &bucket, &prefix, None)
+    let loc = Location { root: bucket, prefix: format!("challenge-{}", id) };
+    let who = Principal { challenge_id: id, emails: challenge.recipient_emails.clone() };
+    let new_sts = access
+        .grant(&loc, &who, GRANT_TTL)
         .await
         .map_err(|e| Custom(Status::InternalServerError, e.to_string()))?;
-
-    let new_sts = AccessType::STS(AWSSTS {
-        access_key: creds.access_key_id().to_string(),
-        secret_key: creds.secret_access_key().to_string(),
-        session_token: creds.session_token().to_string(),
-        expires: creds.expiration().secs() as u64,
-    });
 
     let mut access_types = challenge.access_types.0;
     access_types.retain(|existing| discriminant(existing) != discriminant(&new_sts));

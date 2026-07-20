@@ -3,6 +3,9 @@ use rocket::{Build, Rocket, routes};
 use rocket::{fairing::AdHoc, figment::Figment};
 use std::env;
 
+use crate::dispatch::AccessBackend;
+use crate::dispatch::s3::S3Access;
+
 use super::challenges::{add_access_type, add_challenge, delete_challenge, destroy_challenges, get_challenges, regenerate_sts};
 use super::common::run_migrations;
 use super::requests::{
@@ -31,10 +34,13 @@ pub fn rocket_from_config(figment: Figment) -> Rocket<Build> {
             }
         }))
         .attach(AdHoc::try_on_ignite("SQLx Migrations", run_migrations))
-        .attach(AdHoc::try_on_ignite("AWS STS Client", |rocket| async {
+        .attach(AdHoc::try_on_ignite("S3 access backend", |rocket| async {
             let config = aws_config::load_defaults(BehaviorVersion::latest()).await;
             let client = aws_sdk_sts::Client::new(&config);
-            Ok(rocket.manage(client))
+            // Managed as a trait object so endpoints depend on AccessBackend,
+            // not the concrete S3 implementation.
+            let access: Box<dyn AccessBackend> = Box::new(S3Access::new(client));
+            Ok(rocket.manage(access))
         }))
         .mount(
             "/",

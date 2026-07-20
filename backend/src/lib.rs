@@ -1,4 +1,5 @@
 pub mod assigner;
+pub mod dispatch;
 pub mod endpoints;
 pub mod errors;
 pub mod global_rng;
