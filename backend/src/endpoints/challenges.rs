@@ -75,15 +75,22 @@ pub async fn add_challenge(
     let challenge_id = challenge.id.expect("challenge id missing after INSERT RETURNING");
     let dispatches_to = challenge.dispatches_to.clone();
 
+    // The shared deployment bucket is needed for both S3 grants and S3 transaction
+    // destinations. Read it once here (only if the challenge dispatches to S3) and
+    // pass it down, so nothing deeper reaches into the environment.
+    let s3_bucket = if dispatches_to.contains(&DispatchTarget::S3) {
+        std::env::var("P_PIPE_S3_BUCKET").map_err(|e| {
+            Custom(Status::InternalServerError, format!("P_PIPE_S3_BUCKET not set: {e}"))
+        })?
+    } else {
+        String::new()
+    };
+
     for dispatch in &dispatches_to {
         match dispatch {
             DispatchTarget::S3 => {
-                // TODO: Potentially read the bucket from env first time this runs so we can rely on a constant or smth instead...
-                let bucket = std::env::var("P_PIPE_S3_BUCKET").map_err(|e| {
-                    Custom(Status::InternalServerError, format!("P_PIPE_S3_BUCKET not set: {e}"))
-                })?;
                 // TODO: Potentially have a way to write TTL in the data of the challenge being submitted...
-                let loc = Location { root: bucket, prefix: format!("challenge-{}", challenge_id) };
+                let loc = Location { root: s3_bucket.clone(), prefix: format!("challenge-{}", challenge_id) };
                 let who = Principal { challenge_id, emails: challenge.recipient_emails.clone() };
                 let grant = access
                     .grant(&loc, &who, GRANT_TTL)
@@ -97,7 +104,7 @@ pub async fn add_challenge(
 
     // TODO: Move this to be after generating credentials
     // Generate transactions and add them to the DB
-    let generated_transactions = transactions_from_challenge(challenge)?;
+    let generated_transactions = transactions_from_challenge(challenge, &s3_bucket)?;
     add_transactions_into_db(db.inner(), &generated_transactions).await?;
 
     get_challenges(db).await
@@ -147,7 +154,10 @@ pub async fn add_transactions_into_db(
     Ok(affected)
 }
 
-fn transactions_from_challenge(challenge: Challenge) -> Result<Vec<Transaction>, Custom<String>> {
+fn transactions_from_challenge(
+    challenge: Challenge,
+    s3_bucket: &str,
+) -> Result<Vec<Transaction>, Custom<String>> {
     let mut transactions = Vec::new();
 
     let mut running_proportion: f64 = 0.;
@@ -182,12 +192,7 @@ fn transactions_from_challenge(challenge: Challenge) -> Result<Vec<Transaction>,
         // TODO: We can avoid unecessary cloning by using shuffling with .drain(..n)
         for item in dispatch_locations.cloned() {
             let data_intended_location = match &item {
-                DispatchTarget::S3 => {
-                    let bucket = std::env::var("P_PIPE_S3_BUCKET").map_err(|e| {
-                        Custom(Status::InternalServerError, format!("P_PIPE_S3_BUCKET not set: {e}"))
-                    })?;
-                    format!("{}/challenge-{}", bucket, challenge_id)
-                }
+                DispatchTarget::S3 => format!("{}/challenge-{}", s3_bucket, challenge_id),
                 DispatchTarget::Drive => format!("challenge-{}", challenge_id),
             };
 
@@ -416,7 +421,7 @@ mod tests {
     fn test_transactions_from_challenge_basic() {
         let challenge = challenge_instance(); // 3 release proportions
 
-        let transactions = transactions_from_challenge(challenge)
+        let transactions = transactions_from_challenge(challenge, "p-pipe-test")
             .expect("Could not generate transactions from challenge!");
 
         assert_eq!(
@@ -430,7 +435,7 @@ mod tests {
     #[test]
     fn test_transactions_created_correctly() {
         let challenge = challenge_instance();
-        let created_transactions = transactions_from_challenge(challenge)
+        let created_transactions = transactions_from_challenge(challenge, "p-pipe-test")
             .expect("Could not generate transactions from challenge!");
         let expected_transactions = transactions_expected_from_challenge_instance();
 
@@ -473,7 +478,7 @@ mod tests {
                 access_types: DbJson(vec![]),
             };
 
-            let transactions = transactions_from_challenge(challenge)
+            let transactions = transactions_from_challenge(challenge, "p-pipe-test")
                 .expect("Could not generate transactions from challenge");
 
             // Sum up all rows pushed
@@ -531,7 +536,7 @@ mod tests {
             access_types: DbJson(vec![]),
         };
 
-        let transactions = transactions_from_challenge(challenge)
+        let transactions = transactions_from_challenge(challenge, "p-pipe-test")
         .expect("Could not generate transactions!");
 
         prop_assert!(

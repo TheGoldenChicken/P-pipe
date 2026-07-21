@@ -32,6 +32,11 @@ aws-config = "1"
 aws-sdk-sts = "1"
 lettre = { version = "0.11", features = ["tokio1", "tokio1-native-tls"] }
 
+[dev-dependencies]
+# Only used by the live S3 integration tests (tests/s3_grant_test.rs) to upload,
+# read-back with scoped creds, and clean up. Not needed by the app itself.
+aws-sdk-s3 = "1"
+
 [package.metadata.sqlx]
 offline = true
 

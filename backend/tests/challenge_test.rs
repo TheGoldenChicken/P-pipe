@@ -12,6 +12,8 @@ use backend::testing_common::instances::{
     challenge_instance, minimal_challenge_instance, transactions_expected_from_challenge_instance,
 };
 
+mod common;
+
 // TODO: Important fix the "unprocessable entity due to semantic errors"
 // ... should be more informative in general
 
@@ -40,7 +42,7 @@ async fn challenge_post_basic(
     _: PgPoolOptions,
     pg_connect_options: PgConnectOptions,
 ) -> sqlx::Result<()> {
-    let client = async_client_from_pg_connect_options(pg_connect_options).await;
+    let client = common::client_with_mock_access(pg_connect_options).await;
 
     let challenge = challenge_instance();
     let response = client
@@ -49,7 +51,7 @@ async fn challenge_post_basic(
         .dispatch()
         .await;
 
-    let _response = unpack_challenge_repsponse(response);
+    let _response = unpack_challenge_repsponse(response).await;
     Ok(())
 }
 
@@ -89,7 +91,7 @@ async fn challenge_get_basic(
 
     let response = client.get("/api/challenges").dispatch().await;
 
-    let _response = unpack_challenge_repsponse(response);
+    let _response = unpack_challenge_repsponse(response).await;
     Ok(())
 }
 
@@ -98,7 +100,7 @@ async fn post_minimal_challenge(
     _: PgPoolOptions,
     pg_connect_options: PgConnectOptions,
 ) -> sqlx::Result<()> {
-    let client = async_client_from_pg_connect_options(pg_connect_options).await;
+    let client = common::client_with_mock_access(pg_connect_options).await;
 
     let challenge = minimal_challenge_instance();
     let response = client
@@ -106,7 +108,7 @@ async fn post_minimal_challenge(
         .json(&challenge)
         .dispatch()
         .await;
-    let _response = unpack_challenge_repsponse(response);
+    let _response = unpack_challenge_repsponse(response).await;
     Ok(())
 }
 

@@ -35,6 +35,10 @@ pub fn rocket_from_config(figment: Figment) -> Rocket<Build> {
         }))
         .attach(AdHoc::try_on_ignite("SQLx Migrations", run_migrations))
         .attach(AdHoc::try_on_ignite("S3 access backend", |rocket| async {
+            // Intended to yield to test-provided access backends
+            if rocket.state::<Box<dyn AccessBackend>>().is_some() {
+                return Ok(rocket);
+            }
             let config = aws_config::load_defaults(BehaviorVersion::latest()).await;
             let client = aws_sdk_sts::Client::new(&config);
             // Managed as a trait object so endpoints depend on AccessBackend,
