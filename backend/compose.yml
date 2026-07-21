@@ -2,6 +2,11 @@
 # sudo docker exec -it ppipe_db psql -U postgres
 # sudo docker exec -it ppipe_test_db psql -U postgres -d test_db
 
+# To run containers:
+# docker compose -f compose.yml up -d db    # start (detached / background)
+# docker compose -f compose.yml stop db     # stop, keep the container + data
+
+
 # To list db running:
 # docker ps -a
 
