@@ -1109,3 +1109,18 @@ Also re-added rclone remotes, didn't think of that before. There must be some be
 Looked into adding postman stuff to git, that was more complicated than I thought, or I'm just stupid.
 
 Later, will look into the giving access with traits stuff...
+
+
+# 22/07/2026
+
+Got to work on adding multiple `accessBackends` (claude's name for third location). This was done by having a `HashMap<DispatchTarget, AccessBackend>` - a relatively simple solution. This Hashmap can just be built along with the rest of the fairings, as normal, no problems there. 
+
+Next, wanted to make the third location *truly* generic. Before this, the `POST/challenge` function still had some stuff with `AWS_P_PIPE_BUCKET_NAME`, this was fixed *somewhat* by adding the root of each third location to the `AccessBackend`, and by adding a `DataSink` struct with some functionality like `create_path`. The `DataSink` isn't strictly necessary right now, since it only adds the `create_path`, but it may be useful later on... When we might retire Rclone, though for now, I will consider removing it entirely in favor of only having `AccessBackend`. 
+
+Next thing I started building was the 'mock' and 'test' feature. Basically, there is E2E testing, where a requisite test-third location should be hit, and regular integration testing, where it should not. The former case turned out to be simple - we just need an 'E2E AccessBackend constructor' In the latter case, the application should never attempt to actually hit AWS, meaning calls such as .grant() need to be intercepted *before* they go out. This is a bit tricky, since ideally, this shouldn't ever touch the original function (challenges/post for example), and should have minimal code-overhead, but should still be able distinguish different third locations from one another... problematic. 
+
+I considered using a kind of 'switch', a function that wraps .grant() and other similar cases, and in there, detects whether we are in a test scenario or not, based on stuff like environment variables, flags, or similar. In that case, the switch could make the specific `AccessBackend` give its mock credentials or its actual credentials (via .grant()) based on whether it is a test case or not. The problem here is that it is kind of a weird abstraction, and minimal code overhead. I also considered multiple traits to ensure I had functionality to check like "is this added backend ready for testing?", but having multiple traits, defeats the purpose of having traits at all (post function should never 'see' test code at all)
+
+For now, I might make a very simple system for creating mock access... Something like, in integration test cases another struct is made that just gives mock credentials. This will then either be made bespoke for each third location, or we'll just live with only having a few of them (only S3, by testable via mock). 
+
+My plan is anyways, to later have these grant access credentials, upload data, etc etc. - Things that touch the third locations, not be handled explicitly by a single .post() function. Otherwise, that'll make it extremely heavy. I imagine something closer to the original idea behind the orchestrator, which is probably akin to a state machine / event scheduler, wherein the challenges/post function merely schedules credentials to be made and sent to the requisite students... We'll look into that later.
